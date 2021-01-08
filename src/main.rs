@@ -1,3 +1,5 @@
+mod subsample;
+
 use getopts::Options;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -6,6 +8,7 @@ use image::ImageBuffer;
 use image::Rgb;
 use image::ImageFormat;
 
+#[derive(Clone, Debug)]
 enum OneOrThree<T> {
     One(T),
     Three(T, T, T)
@@ -32,9 +35,12 @@ impl<T: FromStr> FromStr for OneOrThree<T> {
     }
 }
 
+#[derive(Clone, Debug)]
 struct CliArgs {
     pub in_file: PathBuf,
     pub out_file: PathBuf,
+    pub thumbs: bool,
+
     pub black: Option<OneOrThree<u16>>,
     pub white: Option<OneOrThree<f32>>,
     pub exposure: Option<f32>,
@@ -55,6 +61,8 @@ impl CliArgs {
         let mut opts = Options::new();
         opts.reqopt("i", "ifile", "Input path to process", "FILE");
         opts.reqopt("o", "ofile", "Output path", "FILE");
+        opts.optflag("t", "thumbs", "Create low resolution thumbnails from the input path");
+
         opts.optopt("l", "black", "Black level adjustment values\nDefaults to camera's values\nEx: 150 or 150,200,150", "NUMBERS");
         opts.optopt("w", "white", "White balance adjustment values\nDefaults to camera's values\nEx: 1.0 or 2.1,1.0,1.3", "NUMBERS");
         opts.optopt("e", "exposure", "Exposure compensation value\nEx: 1.2", "NUMBER");
@@ -70,6 +78,8 @@ impl CliArgs {
     
         let in_file = PathBuf::from(matches.opt_str("ifile").expect("How'd this happen? ifile isn't present"));
         let out_file = PathBuf::from(matches.opt_str("ofile").expect("How'd this happen? ofile isn't present"));
+        let thumbs = matches.opt_present("thumbs");
+
         let black = matches.opt_get("black").expect("Failed to parse black level values");
         let white = matches.opt_get("white").expect("Failed to parse white balance values");
         let exposure = matches.opt_get("exposure").expect("Failed to parse exposure value");
@@ -79,6 +89,8 @@ impl CliArgs {
         Some(Self {
             in_file,
             out_file,
+            thumbs,
+
             black,
             white,
             exposure,
@@ -91,7 +103,51 @@ impl CliArgs {
 fn main() {
     let cli = CliArgs::new().expect("Cli is none?");
 
-    let mut rimg = rawproc::read_file(cli.in_file.to_str().unwrap());
+    if cli.thumbs {
+        thumbs(cli);
+        return;
+    }
+
+    let rimg = rawproc::read_file(cli.in_file.to_str().unwrap());
+    let bytes = process(cli.clone(), rimg);
+
+    let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.rgb).unwrap();
+    imgbuf.save_with_format(cli.out_file, ImageFormat::Jpeg).unwrap()
+}
+
+fn thumbs(cli: CliArgs) {
+    let threadpool = threadpool::Builder::new().build();
+
+	let contents = std::fs::read_dir(&cli.in_file).expect("Failed to read input directory");
+
+	for entry in contents {
+		let entry = entry.expect("Failed reading a file");
+		let mut filename = PathBuf::from(&entry.file_name());
+		filename.set_extension("jpg");
+
+        let cliclone = cli.clone();
+
+		let mut out_file = cli.out_file.clone();
+		out_file.push(filename);
+		let out_file = out_file.to_str().unwrap().to_owned();
+
+		if entry.metadata().expect("Failed getting a files metadata").is_file() {
+			threadpool.execute(move || {
+                let mut rimg = rawproc::read_file(entry.path().to_str().unwrap());
+                rimg = subsample::subsample(rimg);
+
+                let bytes = process(cliclone, rimg);
+                
+                let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.rgb).unwrap();
+                imgbuf.save_with_format(out_file, ImageFormat::Jpeg).unwrap()
+			})
+		}
+	}
+
+	threadpool.join();
+}
+
+fn process(cli: CliArgs, mut rimg: RawImage) -> RgbImage<u8> {
     black_levels(&mut rimg, cli.black);
     white_balance(&mut rimg, cli.white);
     exposure(&mut rimg, cli.exposure);
@@ -107,8 +163,7 @@ fn main() {
     contrast(&mut bytes, cli.contrast);
     brightness(&mut bytes, cli.brightness);
 
-    let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.rgb).unwrap();
-    imgbuf.save_with_format(cli.out_file, ImageFormat::Jpeg).unwrap()
+    bytes
 }
 
 fn black_levels(rimg: &mut RawImage, levels_opt: Option<OneOrThree<u16>>) {
