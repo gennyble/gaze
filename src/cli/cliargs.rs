@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::error::Error;
 use std::fmt;
 use std::io::Error as IoError;
+use image::ImageFormat;
 
 #[derive(Clone, Debug)]
 pub struct CliArgs {
@@ -11,8 +12,9 @@ pub struct CliArgs {
     pub in_is_dir: bool,
 
     pub out_path: PathBuf,
-    pub thumb: bool,
+    pub out_type: ImageFormat,
 
+    pub thumb: bool,
     pub black: Option<OneOrThree<u16>>,
     pub white: Option<OneOrThree<f32>>,
     pub exposure: Option<f32>,
@@ -26,7 +28,13 @@ impl CliArgs {
         format!("{}", opts.usage(&brief))
     }
 
-    pub fn new() -> Result<Self, CliError> {
+	pub fn new() -> Result<Self, CliError> {
+		let cli = Self::from_cli();
+
+		cli
+	}
+
+    fn from_cli() -> Result<Self, CliError> {
         let args: Vec<String> = std::env::args().collect();
         let program = &args[0];
     
@@ -43,8 +51,8 @@ impl CliArgs {
             If no output path is provided, it will default to the input path\
             + the type extension", "FILE"
         );
+        opts.optopt("", "type", "Set the output image type\nAvailable types are: png, jpeg", "TYPE");
         opts.optflag("t", "thumb", "Scale the image down to 1/4 size");
-
         opts.optopt("l", "black", "Black level adjustment values\nDefaults to camera's values\nEx: 150 or 150,200,150", "INTS");
         opts.optopt("w", "white", "White balance adjustment values\nDefaults to camera's values\nEx: 1.0 or 2.1,1.0,1.3", "FLOATS");
         opts.optopt("e", "exposure", "Exposure compensation value", "FLOAT");
@@ -58,20 +66,51 @@ impl CliArgs {
         };
     
         let in_path = PathBuf::from(matches.opt_str("ipath").expect("How'd this happen? ifile isn't present"));
-
         let in_is_dir = match in_path.metadata() {
             Ok(meta) => meta.is_dir(),
             Err(e) => return Err(CliError::InPathError(e))
         };
 
+        let mut out_type = if let Some(s) = matches.opt_str("type") {
+            match ImageFormat::from_extension(&s) {
+                Some(format) => format,
+                None => return Err(ParseError::imageformat(s).into())
+            }
+        } else {
+            // Defaults to jpeg
+            ImageFormat::Jpeg
+        };
+
         let out_path = match matches.opt_str("opath").map(|s| PathBuf::from(s)) {
-            Some(path) => path,
+            Some(mut path) => {
+				match path.extension() {
+					None => {
+						// No extension, add one from out_type
+						path.set_extension(out_type.extensions_str()[0]);
+					},
+					Some(ext) => {
+						// Out path has extension, does it match a format?
+						match ImageFormat::from_extension(ext) {
+							Some(fmt) => {
+								// Yes! Set the format.
+								out_type = fmt;
+							},
+							None => {
+								// No! Return an error
+								return Err(ParseError::imageformat(ext.to_str().unwrap().to_owned()).into())
+							}
+						}
+					}
+				}
+
+				path
+            },
             None => {
                 if in_is_dir {
                     return Err(CliError::OutPathError);
                 } else {
                     let mut out = in_path.clone();
-                    out.set_extension("jpg"); //TODO: Allow changing output type
+                    out.set_extension(out_type.extensions_str()[0]);
                     out
                 }
             }
@@ -88,7 +127,8 @@ impl CliArgs {
         Ok(Self {
             in_path,
             in_is_dir,
-            out_path,
+			out_path,
+			out_type,
             thumb,
 
             black,
@@ -97,7 +137,7 @@ impl CliArgs {
             contrast,
             brightness
         })
-    }
+	}
 }
 
 #[derive(Debug)]

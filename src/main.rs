@@ -34,7 +34,7 @@ fn file(cli: CliArgs, in_file: &PathBuf, out_file: &PathBuf) {
     let bytes = process(cli.clone(), rimg);
 
     let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.rgb).unwrap();
-    imgbuf.save_with_format(out_file, ImageFormat::Jpeg).unwrap()
+    imgbuf.save_with_format(out_file, cli.out_type).unwrap()
 }
 
 fn directory(cli: CliArgs) {

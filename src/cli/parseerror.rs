@@ -8,6 +8,14 @@ pub struct ParseError {
     kind: ParseErrorKind
 }
 
+impl ParseError {
+    pub(crate) fn imageformat(ext: String) -> ParseError {
+        ParseError {
+            kind: ParseErrorKind::ImageFormat(ext)
+        }
+    }
+}
+
 //TODO: source
 impl Error for ParseError{}
 
@@ -29,6 +37,9 @@ impl fmt::Display for ParseError {
                             1 or 1,4,2 or \"1, 4, 2\"",
                         err
                     )
+            },
+            ParseErrorKind::ImageFormat(format) => {
+                write!(f, "'{}' is not a recognized image format", format)
             }
         }
     }
@@ -38,7 +49,8 @@ impl fmt::Display for ParseError {
 pub enum ParseErrorKind {
     Int(ParseIntError),
     Float(ParseFloatError),
-    OneOrThree(ParseOneOrThreeError)
+    OneOrThree(ParseOneOrThreeError),
+    ImageFormat(String)
 }
 
 //TODO: Macro rules?
