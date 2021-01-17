@@ -396,6 +396,7 @@ name = "rawproc"
 version = "0.1.0"
 dependencies = [
  "libraw-rs",
+ "num-traits",
  "rand",
 ]
 

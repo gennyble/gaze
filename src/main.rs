@@ -2,9 +2,9 @@ mod cli;
 mod subsample;
 
 use std::path::PathBuf;
-use rawproc::{Processor,image::{RawImage, RgbImage}, debayer::{Debayer, Interpolate, NearestNeighbor}};
+use rawproc::{Processor,image::{Image, Sensor, Rgb}, debayer::{Debayer, Interpolate, NearestNeighbor}};
 use image::ImageBuffer;
-use image::Rgb;
+use image::Rgb as ImageRgb;
 use image::ImageFormat;
 use cli::{CliArgs, OneOrThree};
 
@@ -33,7 +33,7 @@ fn file(cli: CliArgs, in_file: &PathBuf, out_file: &PathBuf) {
 
     let bytes = process(cli.clone(), rimg);
 
-    let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.rgb).unwrap();
+    let imgbuf: ImageBuffer<ImageRgb<u8>, Vec<u8>> = ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.data).unwrap();
     imgbuf.save_with_format(out_file, cli.out_type).unwrap()
 }
 
@@ -62,26 +62,27 @@ fn directory(cli: CliArgs) {
 	threadpool.join();
 }
 
-fn process(cli: CliArgs, mut rimg: RawImage) -> RgbImage<u8> {
-    black_levels(&mut rimg, cli.black);
-    white_balance(&mut rimg, cli.white);
-    exposure(&mut rimg, cli.exposure);
+fn process(cli: CliArgs, mut sensor_ints: Image<Sensor, u16>) -> Image<Rgb, u8> {
+	black_levels(&mut sensor_ints, cli.black);
 
-    let mut cimg = Debayer::rgb(rimg);
-    NearestNeighbor::interpolate(&mut cimg);
+	let mut sensor_floats = sensor_ints.to_floats();
+    white_balance(&mut sensor_floats, cli.white);
+    exposure(&mut sensor_floats, cli.exposure);
 
-    let mut floats = cimg.as_float_image();
-    Processor::to_sRGB(&mut floats);
-    Processor::sRGB_gamma(&mut floats);
+    let mut rgb_floats = Debayer::rgb(sensor_floats);
+    NearestNeighbor::interpolate(&mut rgb_floats);
 
-    let mut bytes = floats.as_byte_image();
-    contrast(&mut bytes, cli.contrast);
-    brightness(&mut bytes, cli.brightness);
+    Processor::to_sRGB(&mut rgb_floats);
+    Processor::sRGB_gamma(&mut rgb_floats);
 
-    bytes
+    let mut rgb_bytes = rgb_floats.to_bytes();
+    contrast(&mut rgb_bytes, cli.contrast);
+    brightness(&mut rgb_bytes, cli.brightness);
+
+    rgb_bytes
 }
 
-fn black_levels(rimg: &mut RawImage, levels_opt: Option<OneOrThree<u16>>) {
+fn black_levels(rimg: &mut Image<Sensor, u16>, levels_opt: Option<OneOrThree<u16>>) {
     if let Some(levels) = levels_opt {
         match levels {
             OneOrThree::One(v) => Processor::black_levels(rimg, v, v, v),
@@ -93,7 +94,7 @@ fn black_levels(rimg: &mut RawImage, levels_opt: Option<OneOrThree<u16>>) {
     }
 }
 
-fn white_balance(rimg: &mut RawImage, levels_opt: Option<OneOrThree<f32>>) {
+fn white_balance(rimg: &mut Image<Sensor, f32>, levels_opt: Option<OneOrThree<f32>>) {
     if let Some(levels) = levels_opt {
         match levels {
             OneOrThree::One(v) => Processor::white_balance(rimg, v, v, v),
@@ -105,19 +106,19 @@ fn white_balance(rimg: &mut RawImage, levels_opt: Option<OneOrThree<f32>>) {
     }
 }
 
-fn exposure(rimg: &mut RawImage, ev_opt: Option<f32>) {
+fn exposure(rimg: &mut Image<Sensor, f32>, ev_opt: Option<f32>) {
     if let Some(ev) = ev_opt {
         Processor::exposure(rimg, ev);
     }
 }
 
-fn contrast(cimg: &mut RgbImage<u8>, contrast_opt: Option<f32>) {
+fn contrast(cimg: &mut Image<Rgb, u8>, contrast_opt: Option<f32>) {
     if let Some(contrast) = contrast_opt {
         Processor::contrast(cimg, contrast);
     }
 }
 
-fn brightness(cimg: &mut RgbImage<u8>, brightness_opt: Option<u8>) {
+fn brightness(cimg: &mut Image<Rgb, u8>, brightness_opt: Option<u8>) {
     if let Some(bright) = brightness_opt {
         Processor::brightness(cimg, bright);
     }

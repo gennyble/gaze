@@ -1,6 +1,6 @@
-use rawproc::image::{RawImage, Metadata};
+use rawproc::image::{Component, Image, Sensor, Metadata};
 
-pub fn subsample(rimg: RawImage) -> RawImage {
+pub fn subsample<T: Component>(rimg: Image<Sensor, T>) -> Image<Sensor, T> {
 	// Assuming RGGB and a 1/4 scale
 	let mut raw = vec![];
 
@@ -13,15 +13,15 @@ pub fn subsample(rimg: RawImage) -> RawImage {
 		for x in 0..width {
 			let i =  j + (x as usize * 8);
 
-			raw.push(rimg.raw[i]);
-			raw.push(rimg.raw[i + 1]);
+			raw.push(rimg.data[i]);
+			raw.push(rimg.data[i + 1]);
 		}
 
 		for x in 0..width {
 			let i = j + (x as usize * 8) + rimg.meta.width as usize;
 
-			raw.push(rimg.raw[i]);
-			raw.push(rimg.raw[i + 1]);
+			raw.push(rimg.data[i]);
+			raw.push(rimg.data[i + 1]);
 		}
 	}
 
@@ -30,8 +30,9 @@ pub fn subsample(rimg: RawImage) -> RawImage {
 
 	assert_eq!(width as usize * height as usize, raw.len());
 
-	RawImage {
-		raw: raw,
+	Image {
+		kind: Sensor {},
+		data: raw,
 		meta: Metadata::new(width, height, rimg.meta.cfa, rimg.meta.colordata)
 	}
 }
