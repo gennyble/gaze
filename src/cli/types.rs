@@ -1,12 +1,12 @@
-use std::str::FromStr;
 use std::error::Error;
 use std::fmt;
 use std::num::{ParseFloatError, ParseIntError};
+use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub enum OneOrThree<T> {
     One(T),
-    Three(T, T, T)
+    Three(T, T, T),
 }
 
 impl<T: FromStr> OneOrThree<T> {
@@ -16,7 +16,7 @@ impl<T: FromStr> OneOrThree<T> {
 
             let values: Vec<&str> = s.split(',').map(|s| s.trim()).collect();
 
-            if values.len()  < 3 {
+            if values.len() < 3 {
                 return Err(p1o3e_too_little(values.len()));
             } else if values.len() > 3 {
                 return Err(p1o3e_too_many(values.len()));
@@ -41,11 +41,7 @@ impl FromStr for OneOrThree<f32> {
         match strs {
             OneOrThree::One(v) => Ok(OneOrThree::One(v.parse()?)),
             OneOrThree::Three(v1, v2, v3) => {
-                Ok(OneOrThree::Three(
-                    v1.parse()?,
-                    v2.parse()?,
-                    v3.parse()?
-                ))
+                Ok(OneOrThree::Three(v1.parse()?, v2.parse()?, v3.parse()?))
             }
         }
     }
@@ -60,22 +56,22 @@ impl FromStr for OneOrThree<u16> {
         match strs {
             OneOrThree::One(v) => Ok(OneOrThree::One(v.parse()?)),
             OneOrThree::Three(v1, v2, v3) => {
-                Ok(OneOrThree::Three(
-                    v1.parse()?,
-                    v2.parse()?,
-                    v3.parse()?
-                ))
+                Ok(OneOrThree::Three(v1.parse()?, v2.parse()?, v3.parse()?))
             }
         }
     }
 }
 
 fn p1o3e_too_little(num: usize) -> ParseOneOrThreeError {
-    ParseOneOrThreeError { kind: OneOrThreeErrorKind::TooLittleValues(num) }
+    ParseOneOrThreeError {
+        kind: OneOrThreeErrorKind::TooLittleValues(num),
+    }
 }
 
 fn p1o3e_too_many(num: usize) -> ParseOneOrThreeError {
-    ParseOneOrThreeError { kind: OneOrThreeErrorKind::TooManyValues(num) }
+    ParseOneOrThreeError {
+        kind: OneOrThreeErrorKind::TooManyValues(num),
+    }
 }
 
 fn p1o3e_value_parse(err: &dyn Error) -> ParseOneOrThreeError {
@@ -84,14 +80,14 @@ fn p1o3e_value_parse(err: &dyn Error) -> ParseOneOrThreeError {
             // FIXME: This produces the debug output?
             // "ParseFloatError { kind: Invalid }" instead of "invalid float literal"
             // from https://doc.rust-lang.org/src/core/num/dec2flt/mod.rs.html#202
-            format!("{}", err)
-        )
+            format!("{}", err),
+        ),
     }
 }
 
 #[derive(Debug)]
 pub struct ParseOneOrThreeError {
-    kind: OneOrThreeErrorKind
+    kind: OneOrThreeErrorKind,
 }
 
 impl Error for ParseOneOrThreeError {}
@@ -101,10 +97,10 @@ impl fmt::Display for ParseOneOrThreeError {
         match &self.kind {
             OneOrThreeErrorKind::TooLittleValues(num) => {
                 write!(f, "Expected three values, but only saw {}", num)
-            },
+            }
             OneOrThreeErrorKind::TooManyValues(num) => {
                 write!(f, "Only expected three values, but saw {}", num)
-            },
+            }
             OneOrThreeErrorKind::ValueParseError(err_str) => {
                 write!(f, "Failed to parse a value: {}", err_str)
             }
@@ -128,5 +124,5 @@ impl From<ParseIntError> for ParseOneOrThreeError {
 enum OneOrThreeErrorKind {
     TooLittleValues(usize),
     TooManyValues(usize),
-    ValueParseError(String)
+    ValueParseError(String),
 }
