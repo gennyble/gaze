@@ -19,7 +19,7 @@ pub struct CliArgs {
     pub white: Option<OneOrThree<f32>>,
     pub exposure: Option<f32>,
     pub contrast: Option<f32>,
-    pub brightness: Option<u8>,
+    pub brightness: Option<f32>,
     pub saturation: Option<f32>,
 }
 
@@ -77,7 +77,7 @@ impl CliArgs {
         );
         opts.optopt("e", "exposure", "Exposure compensation value", "FLOAT");
         opts.optopt("c", "contrast", "Contrast adjustment value", "FLOAT");
-        opts.optopt("b", "brightness", "Brightness addition", "INT");
+        opts.optopt("b", "brightness", "Brightness adjustment", "FLOAT");
         opts.optopt("s", "saturation", "Saturation scalar", "FLOAT");
         let matches = match opts.parse(&args[1..]) {
             Ok(m) => m,

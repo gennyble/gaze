@@ -83,13 +83,13 @@ fn process(cli: CliArgs, mut sensor_ints: Image<Sensor, u16>) -> Image<Rgb, u8> 
     Processor::to_sRGB(&mut rgb_floats);
     Processor::sRGB_gamma(&mut rgb_floats);
 
-    let mut hsv_floats: Image<Hsv, f32> = rgb_floats.into();
+	let mut hsv_floats: Image<Hsv, f32> = rgb_floats.into();
+	brightness(&mut hsv_floats, cli.brightness);
     saturation(&mut hsv_floats, cli.saturation);
 
     let rgb_floats: Image<Rgb, f32> = hsv_floats.into();
     let mut rgb_bytes = rgb_floats.to_bytes();
     contrast(&mut rgb_bytes, cli.contrast);
-    brightness(&mut rgb_bytes, cli.brightness);
 
     rgb_bytes
 }
@@ -140,7 +140,7 @@ fn contrast(cimg: &mut Image<Rgb, u8>, contrast_opt: Option<f32>) {
     }
 }
 
-fn brightness(cimg: &mut Image<Rgb, u8>, brightness_opt: Option<u8>) {
+fn brightness(cimg: &mut Image<Hsv, f32>, brightness_opt: Option<f32>) {
     if let Some(bright) = brightness_opt {
         Processor::brightness(cimg, bright);
     }
