@@ -1,13 +1,12 @@
 [package]
 name = "easyraw"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Brad Alfirevic <brad@genbyte.dev>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-iced = "0.2"
 getopts = "0.2"
 rawproc = { path = "../rawproc" }
 image = { version = "0.23", default-features = false, features = ["jpeg", "png"] }

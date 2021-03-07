@@ -113,7 +113,18 @@ fn white_balance(rimg: &mut Image<Sensor, f32>, levels_opt: Option<OneOrThree<f3
             OneOrThree::Three(r, g, b) => Processor::white_balance(rimg, r, g, b),
         }
     } else {
-        let whites = rimg.meta.colordata.cam_mul;
+        let mut whites = rimg.meta.colordata.cam_mul;
+
+		// Normalize values to green. This prevents the issue where libraw
+		// returns whole numbers around 256 instead of floats.
+		if whites[1] != 1.0 {
+			println!("Normalizing whitebalance coefficients, green is {}", whites[1]);
+
+			whites[0] /= whites[1];
+			whites[2] /= whites[1];
+			whites[1] /= whites[1];
+		}
+
         println!(
             "Using whitebalance from camera: {}, {}, {}",
             whites[0], whites[1], whites[2]
