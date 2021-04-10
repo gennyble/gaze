@@ -4,12 +4,13 @@ mod subsample;
 use cli::{CliArgs, OneOrThree};
 use image::ImageBuffer;
 use image::Rgb as ImageRgb;
+use image::Luma as ImageGray;
 use rawproc::{
-    debayer::{Debayer, Interpolate, NearestNeighbor},
-    image::{Hsv, Image, Rgb, Sensor},
+    debayer::{Debayer, Interpolation},
+    image::{Gray, Hsv, Image, Rgb, Sensor},
     Processor,
 };
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 fn main() {
     let cli = match CliArgs::new() {
@@ -77,8 +78,10 @@ fn process(cli: CliArgs, mut sensor_ints: Image<Sensor, u16>) -> Image<Rgb, u8> 
     white_balance(&mut sensor_floats, cli.white);
     exposure(&mut sensor_floats, cli.exposure);
 
-    let mut rgb_floats = Debayer::rgb(sensor_floats);
-    NearestNeighbor::interpolate(&mut rgb_floats);
+	let before = Instant::now();
+    let debayer = Debayer::new(sensor_floats);
+	let mut rgb_floats = debayer.interpolate(Interpolation::Bilinear);
+	println!("Interpolation took {}ms", Instant::now().duration_since(before).as_millis());
 
     Processor::to_sRGB(&mut rgb_floats);
     Processor::sRGB_gamma(&mut rgb_floats);
