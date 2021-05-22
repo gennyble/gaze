@@ -6,4 +6,4 @@ possible.
 If you're looking for a library to do this, you might want to have a look at the crate that powers
 this program: [rawproc][rawproc-github]
 
-[rawproc-github]: https://github.com/genuinebyte/rawproc
+[rawproc-github]: https://github.com/gennyble/rawproc
