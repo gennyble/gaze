@@ -1,16 +1,16 @@
 mod cli;
 mod subsample;
+#[cfg(feature = "tui")]
+mod tui;
 
-use cli::{CliArgs, OneOrThree};
+use cli::CliArgs;
 use image::ImageBuffer;
 use image::Rgb as ImageRgb;
-use image::Luma as ImageGray;
-use rawproc::{
-    debayer::{Debayer, Interpolation},
-    image::{Gray, Hsv, Image, Rgb, Sensor},
-    Processor,
-};
-use std::{path::PathBuf, time::Instant};
+use rawproc::debayer::{Debayer, Interpolation};
+use rawproc::image::HsvImage;
+use rawproc::image::RgbImage;
+use rawproc::image::SensorImage;
+use std::path::PathBuf;
 
 fn main() {
     let cli = match CliArgs::new() {
@@ -20,6 +20,12 @@ fn main() {
             return;
         }
     };
+
+    #[cfg(feature = "tui")]
+    if cli.tui {
+        // If the TUI flag is present, go directly there
+        panic!("TUI")
+    }
 
     if cli.in_is_dir {
         directory(cli);
@@ -38,7 +44,7 @@ fn file(cli: CliArgs, in_file: &PathBuf, out_file: &PathBuf) {
     let bytes = process(cli.clone(), rimg);
 
     let imgbuf: ImageBuffer<ImageRgb<u8>, Vec<u8>> =
-        ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.data).unwrap();
+        ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.inner.data).unwrap();
     imgbuf.save_with_format(out_file, cli.out_type).unwrap()
 }
 
@@ -71,91 +77,41 @@ fn directory(cli: CliArgs) {
     threadpool.join();
 }
 
-fn process(cli: CliArgs, mut sensor_ints: Image<Sensor, u16>) -> Image<Rgb, u8> {
-    black_levels(&mut sensor_ints, cli.black);
+fn process(cli: CliArgs, mut sensor_ints: SensorImage<u16>) -> RgbImage<u8> {
+    sensor_ints.black_levels(cli.black.map(|or3| or3.as_triple_tuple()));
 
-    let mut sensor_floats = sensor_ints.to_floats();
-    white_balance(&mut sensor_floats, cli.white);
-    exposure(&mut sensor_floats, cli.exposure);
+    let mut sensor_floats = sensor_ints.into_floats();
 
-	let before = Instant::now();
+    sensor_floats.white_balance(cli.white.map(|or3| or3.as_triple_tuple()));
+
+    if let Some(ev) = cli.exposure {
+        sensor_floats.exposure(ev);
+    }
+
     let debayer = Debayer::new(sensor_floats);
-	let mut rgb_floats = debayer.interpolate(Interpolation::Bilinear);
-	println!("Interpolation took {}ms", Instant::now().duration_since(before).as_millis());
+    let mut rgb_floats = debayer.interpolate(Interpolation::Bilinear);
 
-    Processor::to_sRGB(&mut rgb_floats);
-    Processor::sRGB_gamma(&mut rgb_floats);
+    rgb_floats.to_srgb();
 
-	let mut hsv_floats: Image<Hsv, f32> = rgb_floats.into();
-	brightness(&mut hsv_floats, cli.brightness);
-    saturation(&mut hsv_floats, cli.saturation);
+    let mut hsv_floats: HsvImage<f32> = rgb_floats.into();
+    if let Some(bright) = cli.brightness {
+        hsv_floats.brightness(bright);
+    }
 
-    let rgb_floats: Image<Rgb, f32> = hsv_floats.into();
-    let mut rgb_bytes = rgb_floats.to_bytes();
-    contrast(&mut rgb_bytes, cli.contrast);
+    if let Some(sat) = cli.saturation {
+        hsv_floats.saturation(sat);
+    }
+
+    if let Some(shift) = cli.hue_shift {
+        hsv_floats.hue_shift(shift);
+    }
+
+    let mut rgb_floats: RgbImage<f32> = hsv_floats.into();
+    if let Some(con) = cli.contrast {
+        rgb_floats.contrast(con);
+    }
+
+    let rgb_bytes = rgb_floats.into_u8s();
 
     rgb_bytes
-}
-
-fn black_levels(rimg: &mut Image<Sensor, u16>, levels_opt: Option<OneOrThree<u16>>) {
-    if let Some(levels) = levels_opt {
-        match levels {
-            OneOrThree::One(v) => Processor::black_levels(rimg, v, v, v),
-            OneOrThree::Three(r, g, b) => Processor::black_levels(rimg, r, g, b),
-        }
-    } else {
-        let black = rimg.meta.colordata.black as u16;
-        Processor::black_levels(rimg, black, black, black);
-    }
-}
-
-fn white_balance(rimg: &mut Image<Sensor, f32>, levels_opt: Option<OneOrThree<f32>>) {
-    if let Some(levels) = levels_opt {
-        match levels {
-            OneOrThree::One(v) => Processor::white_balance(rimg, v, v, v),
-            OneOrThree::Three(r, g, b) => Processor::white_balance(rimg, r, g, b),
-        }
-    } else {
-        let mut whites = rimg.meta.colordata.cam_mul;
-
-		// Normalize values to green. This prevents the issue where libraw
-		// returns whole numbers around 256 instead of floats.
-		if whites[1] != 1.0 {
-			println!("Normalizing whitebalance coefficients, green is {}", whites[1]);
-
-			whites[0] /= whites[1];
-			whites[2] /= whites[1];
-			whites[1] /= whites[1];
-		}
-
-        println!(
-            "Using whitebalance from camera: {}, {}, {}",
-            whites[0], whites[1], whites[2]
-        );
-        Processor::white_balance(rimg, whites[0], whites[1], whites[2]);
-    }
-}
-
-fn exposure(rimg: &mut Image<Sensor, f32>, ev_opt: Option<f32>) {
-    if let Some(ev) = ev_opt {
-        Processor::exposure(rimg, ev);
-    }
-}
-
-fn saturation(img: &mut Image<Hsv, f32>, sat_opt: Option<f32>) {
-    if let Some(sat) = sat_opt {
-        Processor::saturation(img, sat);
-    }
-}
-
-fn contrast(cimg: &mut Image<Rgb, u8>, contrast_opt: Option<f32>) {
-    if let Some(contrast) = contrast_opt {
-        Processor::contrast(cimg, contrast);
-    }
-}
-
-fn brightness(cimg: &mut Image<Hsv, f32>, brightness_opt: Option<f32>) {
-    if let Some(bright) = brightness_opt {
-        Processor::brightness(cimg, bright);
-    }
 }

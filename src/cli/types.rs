@@ -31,6 +31,15 @@ impl<T: FromStr> OneOrThree<T> {
     }
 }
 
+impl<T: Copy> OneOrThree<T> {
+    pub fn as_triple_tuple(&self) -> (T, T, T) {
+        match self {
+            OneOrThree::One(v) => (*v, *v, *v),
+            OneOrThree::Three(a, b, c) => (*a, *b, *c),
+        }
+    }
+}
+
 //TODO: Use  a macro rules to generate these?
 impl FromStr for OneOrThree<f32> {
     type Err = ParseOneOrThreeError;

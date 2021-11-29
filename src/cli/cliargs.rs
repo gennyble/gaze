@@ -21,6 +21,9 @@ pub struct CliArgs {
     pub contrast: Option<f32>,
     pub brightness: Option<f32>,
     pub saturation: Option<f32>,
+    pub hue_shift: Option<f32>,
+    #[cfg(feature = "tui")]
+    pub tui: bool,
 }
 
 impl CliArgs {
@@ -79,6 +82,9 @@ impl CliArgs {
         opts.optopt("c", "contrast", "Contrast adjustment value", "FLOAT");
         opts.optopt("b", "brightness", "Brightness adjustment", "FLOAT");
         opts.optopt("s", "saturation", "Saturation scalar", "FLOAT");
+        opts.optopt("", "hue-shift", "Shift the hue value", "FLOAT");
+        #[cfg(feature = "tui")]
+        opts.optflag("", "tui", "Ignore image adjustment flags and start the tui");
         let matches = match opts.parse(&args[1..]) {
             Ok(m) => m,
             Err(_e) => {
@@ -169,6 +175,11 @@ impl CliArgs {
         let saturation = matches
             .opt_get("saturation")
             .map_err(|e| ParseError::from(e))?;
+        let hue_shift = matches
+            .opt_get("hue-shift")
+            .map_err(|e| ParseError::from(e))?;
+        #[cfg(feature = "tui")]
+        let tui = matches.opt_present("tui");
 
         Ok(Self {
             in_path,
@@ -183,6 +194,9 @@ impl CliArgs {
             contrast,
             brightness,
             saturation,
+            hue_shift,
+            #[cfg(feature = "tui")]
+            tui,
         })
     }
 }

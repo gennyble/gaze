@@ -1,6 +1,6 @@
-use rawproc::image::{Component, Image, Metadata, Sensor};
+use rawproc::image::{Component, InnerImage, Metadata, SensorImage};
 
-pub fn subsample<T: Component>(rimg: Image<Sensor, T>) -> Image<Sensor, T> {
+pub fn subsample<T: Component>(rimg: SensorImage<T>) -> SensorImage<T> {
     // Assuming RGGB and a 1/4 scale
     let mut raw = vec![];
 
@@ -30,9 +30,15 @@ pub fn subsample<T: Component>(rimg: Image<Sensor, T>) -> Image<Sensor, T> {
 
     assert_eq!(width as usize * height as usize, raw.len());
 
-    Image {
-        kind: Sensor {},
-        data: raw,
-        meta: Metadata::new(width, height, rimg.meta.cfa, rimg.meta.colordata),
+    SensorImage {
+        inner: InnerImage {
+            data: raw,
+            meta: Metadata::new(
+                width,
+                height,
+                rimg.inner.meta.cfa,
+                rimg.inner.meta.colordata,
+            ),
+        },
     }
 }
