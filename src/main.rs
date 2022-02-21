@@ -4,12 +4,15 @@ mod subsample;
 mod tui;
 
 use cli::CliArgs;
+use image::imageops::rotate270;
+use image::imageops::rotate90;
 use image::ImageBuffer;
 use image::Rgb as ImageRgb;
 use rawproc::debayer::{Debayer, Interpolation};
 use rawproc::image::HsvImage;
 use rawproc::image::RgbImage;
 use rawproc::image::SensorImage;
+use std::fs::File;
 use std::path::PathBuf;
 
 fn main() {
@@ -44,7 +47,10 @@ fn file(cli: CliArgs, in_file: &PathBuf, out_file: &PathBuf) {
     let bytes = process(cli.clone(), rimg);
 
     let imgbuf: ImageBuffer<ImageRgb<u8>, Vec<u8>> =
-        ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.inner.data).unwrap();
+        ImageBuffer::from_raw(bytes.meta.width, bytes.meta.height, bytes.data).unwrap();
+
+    let imgbuf = rotate270(&imgbuf);
+
     imgbuf.save_with_format(out_file, cli.out_type).unwrap()
 }
 
@@ -61,16 +67,17 @@ fn directory(cli: CliArgs) {
         let cliclone = cli.clone();
 
         let mut out_file = cli.out_path.clone();
-        out_file.push(filename);
+        out_file.push(&filename);
 
         if entry
             .metadata()
             .expect("Failed getting a files metadata")
             .is_file()
         {
-            threadpool.execute(move || {
-                file(cliclone, &entry.path(), &out_file);
-            })
+            //threadpool.execute(move || {
+            println!("{}", filename.to_string_lossy());
+            file(cliclone, &entry.path(), &out_file);
+            //})
         }
     }
 
@@ -82,10 +89,47 @@ fn process(cli: CliArgs, mut sensor_ints: SensorImage<u16>) -> RgbImage<u8> {
 
     let mut sensor_floats = sensor_ints.into_floats();
 
+    if cli.auto_level {
+        let mut lowest = 1.0;
+        let mut highest = 0.0;
+        for value in sensor_floats.data.iter() {
+            if *value < lowest {
+                lowest = *value;
+            } else if *value > highest {
+                highest = *value;
+            }
+        }
+
+        let high_adjust = 1.0 / (highest - lowest);
+
+        println!("auto-leveling with an ev of {}", high_adjust);
+
+        for value in sensor_floats.data.iter_mut() {
+            *value = (*value - lowest) * high_adjust;
+        }
+    }
+
     sensor_floats.white_balance(cli.white.map(|or3| or3.as_triple_tuple()));
 
     if let Some(ev) = cli.exposure {
         sensor_floats.exposure(ev);
+    }
+
+    if let Some(curve_file) = cli.tone_curve_path {
+        let curve_string = std::fs::read_to_string(curve_file).unwrap();
+        let curve_floats: Vec<f32> = curve_string
+            .lines()
+            .map(|line| line.trim().parse::<f32>().unwrap())
+            .collect();
+
+        for pixel in sensor_floats.data.iter_mut() {
+            let position = *pixel * (curve_floats.len() as f32 - 1.0);
+            let start = curve_floats[position.floor() as usize];
+            let end = curve_floats[position.ceil() as usize];
+            let percent = position.fract();
+
+            *pixel = lerp(start, end, percent);
+        }
     }
 
     let debayer = Debayer::new(sensor_floats);
@@ -93,7 +137,7 @@ fn process(cli: CliArgs, mut sensor_ints: SensorImage<u16>) -> RgbImage<u8> {
 
     rgb_floats.to_srgb();
 
-    let mut hsv_floats: HsvImage<f32> = rgb_floats.into();
+    let mut hsv_floats = rgb_floats.into_hsv();
     if let Some(bright) = cli.brightness {
         hsv_floats.brightness(bright);
     }
@@ -106,12 +150,56 @@ fn process(cli: CliArgs, mut sensor_ints: SensorImage<u16>) -> RgbImage<u8> {
         hsv_floats.hue_shift(shift);
     }
 
-    let mut rgb_floats: RgbImage<f32> = hsv_floats.into();
+    let mut rgb_floats = hsv_floats.into_rgb();
     if let Some(con) = cli.contrast {
         rgb_floats.contrast(con);
     }
 
-    let rgb_bytes = rgb_floats.into_u8s();
+    rgb_floats.into_u8s()
+}
 
-    rgb_bytes
+fn lerp(start: f32, end: f32, percent: f32) -> f32 {
+    start + (end - start) * percent
+}
+
+fn temperature_to_rgb(kelvin: f32) -> (f32, f32, f32) {
+    let temperature = kelvin / 100.0;
+
+    let red = if temperature <= 66.0 {
+        255.0
+    } else {
+        let mut red = temperature - 60.0;
+        red = 329.698727446 * red.powf(-0.1332047592);
+
+        red.clamp(0.0, 255.0)
+    };
+
+    let green = if temperature <= 66.0 {
+        let mut green = temperature;
+        green = 99.4708025861 * green.ln() - 161.1195681661;
+
+        green.clamp(0.0, 255.0)
+    } else {
+        let mut green = temperature - 60.0;
+        green = 288.1221695283 * green.powf(-0.0755148492);
+
+        green.clamp(0.0, 255.0)
+    };
+
+    let blue = if temperature >= 66.0 {
+        255.0
+    } else {
+        if temperature <= 19.0 {
+            0.0
+        } else {
+            let mut blue = temperature - 10.0;
+            blue = 138.5177312231 * blue.ln() - 305.0447927307;
+
+            blue.clamp(0.0, 255.0)
+        }
+    };
+
+    let max = red.min(green).min(blue);
+
+    (1.0 / (red / max), 1.0 / (green / max), 1.0 / (blue / max))
 }

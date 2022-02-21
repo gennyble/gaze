@@ -17,11 +17,15 @@ pub struct CliArgs {
     pub thumb: bool,
     pub black: Option<OneOrThree<u16>>,
     pub white: Option<OneOrThree<f32>>,
+    pub auto_level: bool,
     pub exposure: Option<f32>,
     pub contrast: Option<f32>,
     pub brightness: Option<f32>,
     pub saturation: Option<f32>,
     pub hue_shift: Option<f32>,
+
+    pub tone_curve_path: Option<PathBuf>,
+
     #[cfg(feature = "tui")]
     pub tui: bool,
 }
@@ -78,11 +82,17 @@ impl CliArgs {
             "White balance adjustment values\nDefaults to camera's values\nEx: 1.0 or 2.1,1.0,1.3",
             "FLOATS",
         );
+        opts.optflag(
+            "a",
+            "auto-level",
+            "Ensure the image uses the entire output range",
+        );
         opts.optopt("e", "exposure", "Exposure compensation value", "FLOAT");
         opts.optopt("c", "contrast", "Contrast adjustment value", "FLOAT");
         opts.optopt("b", "brightness", "Brightness adjustment", "FLOAT");
         opts.optopt("s", "saturation", "Saturation scalar", "FLOAT");
         opts.optopt("", "hue-shift", "Shift the hue value", "FLOAT");
+        opts.optopt("", "curve-file", "Apply a tone curve to the image", "FILE");
         #[cfg(feature = "tui")]
         opts.optflag("", "tui", "Ignore image adjustment flags and start the tui");
         let matches = match opts.parse(&args[1..]) {
@@ -163,6 +173,7 @@ impl CliArgs {
 
         let black = matches.opt_get("black").map_err(|e| ParseError::from(e))?;
         let white = matches.opt_get("white").map_err(|e| ParseError::from(e))?;
+        let auto_level = matches.opt_present("auto-level");
         let exposure = matches
             .opt_get("exposure")
             .map_err(|e| ParseError::from(e))?;
@@ -178,6 +189,10 @@ impl CliArgs {
         let hue_shift = matches
             .opt_get("hue-shift")
             .map_err(|e| ParseError::from(e))?;
+
+        // SAFTEY: PathBuf::from_str's Err is Infallible
+        let tone_curve_path = matches.opt_get("curve-file").unwrap();
+
         #[cfg(feature = "tui")]
         let tui = matches.opt_present("tui");
 
@@ -190,11 +205,14 @@ impl CliArgs {
 
             black,
             white,
+            auto_level,
             exposure,
             contrast,
             brightness,
             saturation,
             hue_shift,
+            tone_curve_path,
+
             #[cfg(feature = "tui")]
             tui,
         })
