@@ -1,6 +1,6 @@
 mod cli;
 mod subsample;
-#[cfg(feature = "tui")]
+//#[cfg(feature = "tui")]
 mod tui;
 
 use cli::CliArgs;
@@ -26,8 +26,7 @@ fn main() {
 
     #[cfg(feature = "tui")]
     if cli.tui {
-        // If the TUI flag is present, go directly there
-        panic!("TUI")
+        tui::Tui::new(cli).handoff()
     }
 
     if cli.in_is_dir {
