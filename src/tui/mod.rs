@@ -2,10 +2,12 @@ use std::{
     io::Write,
     mem::size_of,
     path::PathBuf,
-    sync::mpsc::{channel, Sender, TryRecvError},
+    sync::mpsc::{channel, Receiver, Sender, TryRecvError},
+    time::Duration,
 };
 
-use give::Give;
+use colorogram::make_histogram;
+use give::{Give, GiveWindowBuilder, WindowId};
 use rawproc::{
     debayer::{Debayer, Interpolation},
     image::{Image, RgbImage, SensorImage},
@@ -16,7 +18,12 @@ use crate::{cli::CliArgs, subsample};
 pub struct Tui {
     file_path: PathBuf,
     image: EditingImage,
+
+    give: Give,
     preview: Option<Preview>,
+    histogram: Option<Preview>,
+
+    last_command: Option<String>,
 }
 
 impl Tui {
@@ -35,107 +42,258 @@ impl Tui {
         Tui {
             file_path,
             image,
+            give: Give::new(),
             preview: None,
+            histogram: None,
+            last_command: None,
         }
     }
 
     pub fn handoff(mut self) -> ! {
-        let (tx, rx) = channel();
+        let (command_tx, command_rx) = channel();
+        let (stdout_tx, stdout_rx) = channel();
 
         println!("Image cache at: {}MB", self.image.megabytes());
 
-        let cmd = CommandLine { tx };
+        let cmd = CommandLine {
+            tx: command_tx,
+            rx: stdout_rx,
+        };
         std::thread::spawn(|| cmd.run());
 
         loop {
-            match rx.try_recv() {
-                Ok(line) => self.process_command(line),
+            match command_rx.try_recv() {
+                Ok(line) => self.process_command(line, &stdout_tx),
                 Err(TryRecvError::Disconnected) => std::process::exit(0),
                 Err(TryRecvError::Empty) => (),
             };
 
-            if let Some(ref mut window) = self.preview {
-                window.give.window_events();
+            if self.preview.is_some() || self.histogram.is_some() {
+                self.give.window_events();
             }
         }
     }
 
-    fn process_command(&mut self, line: String) {
+    fn process_command(&mut self, line: String, tx: &Sender<Message>) {
         let mut splits = line.trim().split(' ');
         let command = splits.next();
+        //let arguments = splits.collect();
+
+        macro_rules! msg {
+            ($($arg:tt)*) => {
+                tx.send(Message::Normal(std::fmt::format(format_args!($($arg)*)))).unwrap()
+            };
+        }
+
+        macro_rules! err {
+            ($($arg:tt)*) => {
+                tx.send(Message::Error(std::fmt::format(format_args!($($arg)*)))).unwrap()
+            };
+        }
 
         match command {
             None => eprintln!("No command!"),
             Some("preview") => match self.preview {
                 Some(_) => {
-                    eprintln!("Preview window already open!")
+                    err!("Preview window already open!")
                 }
                 None => {
-                    print!("Building preview window...");
-                    std::io::stdout().flush().unwrap();
-                    self.preview = Some(Preview::new(&self.image.done));
-                    println!("Done!");
+                    msg!("Opening preview...");
+                    self.preview = Some(Preview::new(&mut self.give, self.image.done.clone()));
+                    msg!("Done!");
                 }
             },
             Some("close_preview") => match self.preview.take() {
-                None => eprintln!("No preview open!"),
-                Some(_) => println!("Closed preview!"),
+                None => err!("No preview open!"),
+                Some(_) => msg!("Closed preview!"),
+            },
+            Some("histogram") => match self.histogram {
+                Some(_) => {
+                    err!("Histogram window already open!")
+                }
+                None => {
+                    msg!("Opening Histogram...");
+                    let himg = self.make_histogram_image();
+                    self.histogram = Some(Preview::new(&mut self.give, himg));
+                    msg!("Done!");
+                }
             },
             Some("exposure") => match splits.next().map(|s| s.parse()) {
                 None | Some(Err(_)) => {
-                    eprintln!("usage: exposure <ev_value>\nexample:\n\texposure 1.3")
+                    msg!("usage: exposure <ev_value>\nexample:\n\texposure 1.3")
                 }
                 Some(Ok(ev)) => {
                     self.image.exposure(Some(ev));
                     self.image_changed()
                 }
             },
-            Some(cmd) => eprintln!("Unrecognized command '{cmd}'"),
+            Some("goodbye") => std::process::exit(0),
+            Some(cmd) => err!("Unrecognized command '{cmd}'"),
+        }
+    }
+
+    fn make_histogram_image(&self) -> Image8 {
+        let histo = make_histogram(self.image.done.data(), 640, 480);
+        Image8 {
+            data: histo,
+            width: 640,
+            height: 480,
         }
     }
 
     fn image_changed(&mut self) {
         if let Some(ref mut prev) = self.preview {
-            prev.update(&self.image.done);
+            prev.update(&mut self.give, self.image.done.clone());
         }
+
+        if self.histogram.is_some() {
+            let himg = self.make_histogram_image();
+            if let Some(ref mut histo) = self.histogram {
+                histo.update(&mut self.give, himg)
+            }
+        }
+    }
+}
+
+trait Command {
+    fn usage() -> &'static str;
+    fn run(image: &mut EditingImage, arguments: Vec<String>) -> Result<(), CommandError>;
+}
+
+enum CommandError {
+    MissingArgument { index: usize, argument_name: String },
+    InvalidArgument { argument: String, reason: String },
+}
+
+impl CommandError {
+    pub fn missing_argument<S: Into<String>>(idx: usize, argument_name: S) -> Self {
+        CommandError::MissingArgument {
+            index: idx,
+            argument_name: argument_name.into(),
+        }
+    }
+}
+
+struct Exposure;
+impl Command for Exposure {
+    fn usage() -> &'static str {
+        "exposure clear OR exposure <ev>"
+    }
+
+    fn run(image: &mut EditingImage, arguments: Vec<String>) -> Result<(), CommandError> {
+        /*let ev = match arguments.get(0) {
+            None => return Err(CommandError::missing_argument(0, "ev")),
+            Some(ev) => match
+        }*/
+        todo!()
     }
 }
 
 struct CommandLine {
     tx: Sender<String>,
+    rx: Receiver<Message>,
 }
 
 impl CommandLine {
+    const PROMPT: &'static str = "> ";
+
     pub fn run(self) -> ! {
+        let (stdin_tx, stdin_rx) = channel();
+        let _join = Self::do_stdin(stdin_tx);
+
+        print!("{}", Self::PROMPT);
+        std::io::stdout().flush().unwrap();
+
         loop {
+            match stdin_rx.try_recv() {
+                Ok(line) => {
+                    if let Err(e) = self.tx.send(line) {
+                        eprintln!("Failed to send stdin back to main thread! {e}");
+                    }
+                    print!("{}", Self::PROMPT);
+                    std::io::stdout().flush().unwrap();
+                }
+                Err(TryRecvError::Empty) => (),
+                Err(TryRecvError::Disconnected) => {
+                    eprintln!("stdin channel closed! Did the thread die?")
+                }
+            }
+
+            match self.rx.try_recv() {
+                Ok(Message::Normal(line)) => {
+                    print!("\r{line}\n{}", Self::PROMPT);
+                    std::io::stdout().flush().unwrap();
+                }
+                Ok(Message::Error(error)) => {
+                    print!("\r{error}\n{}", Self::PROMPT);
+                    std::io::stdout().flush().unwrap();
+                }
+                Err(TryRecvError::Disconnected) => {
+                    eprintln!("log channel closed! What happened?")
+                }
+                Err(TryRecvError::Empty) => std::thread::sleep(Duration::from_micros(100)),
+            }
+        }
+    }
+
+    fn do_stdin(tx: Sender<String>) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || loop {
             let mut buf = String::new();
-            print!("> ");
-            std::io::stdout().flush().unwrap();
             std::io::stdin().read_line(&mut buf).unwrap();
-            print!("{buf}");
-            std::io::stdout().flush().unwrap();
-            self.tx.send(buf).unwrap();
+
+            match tx.send(buf) {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("stdin transmit channel broke! {e}");
+                    break;
+                }
+            }
+        })
+    }
+}
+
+enum Message {
+    Error(String),
+    Normal(String),
+}
+
+struct Image8 {
+    data: Vec<u8>,
+    width: usize,
+    height: usize,
+}
+
+impl From<RgbImage<u8>> for Image8 {
+    fn from(value: RgbImage<u8>) -> Self {
+        Self {
+            data: value.data,
+            width: value.meta.width as usize,
+            height: value.meta.height as usize,
         }
     }
 }
 
 struct Preview {
-    give: Give,
+    window: WindowId,
 }
 
 impl Preview {
-    pub fn new(image: &RgbImage<u8>) -> Self {
-        let mut this = Self { give: Give::new() };
-        this.update(image);
-        this.give.make_window(640, 480);
-        this
+    pub fn new<M: Into<Image8>>(give: &mut Give, image: M) -> Self {
+        let image = image.into();
+        let window = GiveWindowBuilder::new()
+            .buffer_rgb8(image.data, image.width, image.height)
+            .build(give);
+
+        Self { window }
     }
 
-    pub fn update(&mut self, image: &RgbImage<u8>) {
-        self.give.display_buffered_rgb8(
-            image.meta.width as usize,
-            image.meta.height as usize,
-            image.data.clone(),
+    pub fn update<M: Into<Image8>>(&mut self, give: &mut Give, image: M) {
+        let image = image.into();
+        give.display_buffered_rgb8(
+            &self.window,
+            image.width as usize,
+            image.height as usize,
+            image.data,
         );
     }
 }

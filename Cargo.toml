@@ -1,7 +1,7 @@
 [package]
 name = "easyraw"
 version = "0.1.1"
-authors = ["Genevive <gen@nyble.dev>"]
+authors = ["Genevieve <gen@nyble.dev>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,7 +13,9 @@ image = { version = "0.23", default-features = false, features = ["jpeg", "png"]
 threadpool = "1.8.1"
 termion = { version = "1.5.6", optional = true }
 give = { path = "../give", optional = true }
+#tokio = { version = "1.21.2", features = ["rt", "io-std"], optional = true }
+colorogram = { path = "../colorogram", optional = true }
 
 [features]
 default = ["tui"]
-tui = ["termion", "give"]
+tui = ["termion", "give", "colorogram"]#, "tokio"]
