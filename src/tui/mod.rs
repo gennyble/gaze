@@ -1,13 +1,16 @@
+mod interface;
+
 use std::{
-    io::Write,
+    io::{stdout, Write},
     mem::size_of,
     path::PathBuf,
     sync::mpsc::{channel, Receiver, Sender, TryRecvError},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use colorogram::make_histogram;
 use give::{Give, GiveWindowBuilder, WindowId};
+use image::{ImageBuffer, ImageFormat, Rgb};
 use rawproc::{
     debayer::{Debayer, Interpolation},
     image::{Image, RgbImage, SensorImage},
@@ -15,15 +18,17 @@ use rawproc::{
 
 use crate::{cli::CliArgs, subsample};
 
+use self::interface::{Interface, Message, OperationMessage};
+
 pub struct Tui {
     file_path: PathBuf,
+    out_path: PathBuf,
+    out_type: ImageFormat,
     image: EditingImage,
 
     give: Give,
     preview: Option<Preview>,
     histogram: Option<Preview>,
-
-    last_command: Option<String>,
 }
 
 impl Tui {
@@ -41,11 +46,12 @@ impl Tui {
 
         Tui {
             file_path,
+            out_path: cliargs.out_path,
+            out_type: cliargs.out_type,
             image,
             give: Give::new(),
             preview: None,
             histogram: None,
-            last_command: None,
         }
     }
 
@@ -55,15 +61,16 @@ impl Tui {
 
         println!("Image cache at: {}MB", self.image.megabytes());
 
-        let cmd = CommandLine {
-            tx: command_tx,
-            rx: stdout_rx,
-        };
-        std::thread::spawn(|| cmd.run());
+        let cmd = Interface::new(command_tx, stdout_rx);
+        let command_join = std::thread::spawn(|| cmd.run());
 
         loop {
             match command_rx.try_recv() {
-                Ok(line) => self.process_command(line, &stdout_tx),
+                Ok(line) => {
+                    if self.process_command(line, &stdout_tx) {
+                        break;
+                    }
+                }
                 Err(TryRecvError::Disconnected) => std::process::exit(0),
                 Err(TryRecvError::Empty) => (),
             };
@@ -72,13 +79,12 @@ impl Tui {
                 self.give.window_events();
             }
         }
+
+        command_join.join().unwrap();
+        std::process::exit(0);
     }
 
-    fn process_command(&mut self, line: String, tx: &Sender<Message>) {
-        let mut splits = line.trim().split(' ');
-        let command = splits.next();
-        //let arguments = splits.collect();
-
+    fn process_command(&mut self, operation: OperationMessage, tx: &Sender<Message>) -> bool {
         macro_rules! msg {
             ($($arg:tt)*) => {
                 tx.send(Message::Normal(std::fmt::format(format_args!($($arg)*)))).unwrap()
@@ -91,45 +97,66 @@ impl Tui {
             };
         }
 
-        match command {
-            None => eprintln!("No command!"),
-            Some("preview") => match self.preview {
-                Some(_) => {
-                    err!("Preview window already open!")
+        match operation {
+            OperationMessage::TogglePreview => match self.preview.as_ref() {
+                Some(preview) => {
+                    //TODO: close preview
                 }
                 None => {
                     msg!("Opening preview...");
                     self.preview = Some(Preview::new(&mut self.give, self.image.done.clone()));
-                    msg!("Done!");
                 }
             },
-            Some("close_preview") => match self.preview.take() {
-                None => err!("No preview open!"),
-                Some(_) => msg!("Closed preview!"),
-            },
-            Some("histogram") => match self.histogram {
-                Some(_) => {
-                    err!("Histogram window already open!")
+            OperationMessage::ToggleHistogram => match self.histogram.as_ref() {
+                Some(histogram) => {
+                    //TODO: Close histogram
                 }
                 None => {
                     msg!("Opening Histogram...");
                     let himg = self.make_histogram_image();
                     self.histogram = Some(Preview::new(&mut self.give, himg));
-                    msg!("Done!");
                 }
             },
-            Some("exposure") => match splits.next().map(|s| s.parse()) {
-                None | Some(Err(_)) => {
-                    msg!("usage: exposure <ev_value>\nexample:\n\texposure 1.3")
-                }
-                Some(Ok(ev)) => {
-                    self.image.exposure(Some(ev));
-                    self.image_changed()
-                }
-            },
-            Some("goodbye") => std::process::exit(0),
-            Some(cmd) => err!("Unrecognized command '{cmd}'"),
+            OperationMessage::BlackLevels(clr) => {
+                self.image.black_levels(Some(clr));
+                self.image_changed()
+            }
+            OperationMessage::Exposure(ev) => {
+                self.image.exposure(Some(ev));
+                self.image_changed()
+            }
+            OperationMessage::Shutdown => return true,
+            OperationMessage::Save => {
+                let start = Instant::now();
+                let sensor = rawproc::read_file(self.file_path.to_str().unwrap());
+                let step1 = step1(
+                    sensor,
+                    self.image.black_levels,
+                    self.image.white_balance,
+                    self.image.exposure,
+                );
+
+                let step2 = step2(step1);
+
+                let step3 = step3(
+                    step2,
+                    self.image.brightness,
+                    self.image.saturation,
+                    self.image.contrast,
+                );
+
+                let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                    ImageBuffer::from_raw(step3.meta.width, step3.meta.height, step3.data).unwrap();
+                imgbuf
+                    .save_with_format(&self.out_path, self.out_type)
+                    .unwrap();
+
+                msg!("Image saved! [{}ms]", start.elapsed().as_millis())
+            }
+            _ => (),
         }
+
+        false
     }
 
     fn make_histogram_image(&self) -> Image8 {
@@ -153,108 +180,6 @@ impl Tui {
             }
         }
     }
-}
-
-trait Command {
-    fn usage() -> &'static str;
-    fn run(image: &mut EditingImage, arguments: Vec<String>) -> Result<(), CommandError>;
-}
-
-enum CommandError {
-    MissingArgument { index: usize, argument_name: String },
-    InvalidArgument { argument: String, reason: String },
-}
-
-impl CommandError {
-    pub fn missing_argument<S: Into<String>>(idx: usize, argument_name: S) -> Self {
-        CommandError::MissingArgument {
-            index: idx,
-            argument_name: argument_name.into(),
-        }
-    }
-}
-
-struct Exposure;
-impl Command for Exposure {
-    fn usage() -> &'static str {
-        "exposure clear OR exposure <ev>"
-    }
-
-    fn run(image: &mut EditingImage, arguments: Vec<String>) -> Result<(), CommandError> {
-        /*let ev = match arguments.get(0) {
-            None => return Err(CommandError::missing_argument(0, "ev")),
-            Some(ev) => match
-        }*/
-        todo!()
-    }
-}
-
-struct CommandLine {
-    tx: Sender<String>,
-    rx: Receiver<Message>,
-}
-
-impl CommandLine {
-    const PROMPT: &'static str = "> ";
-
-    pub fn run(self) -> ! {
-        let (stdin_tx, stdin_rx) = channel();
-        let _join = Self::do_stdin(stdin_tx);
-
-        print!("{}", Self::PROMPT);
-        std::io::stdout().flush().unwrap();
-
-        loop {
-            match stdin_rx.try_recv() {
-                Ok(line) => {
-                    if let Err(e) = self.tx.send(line) {
-                        eprintln!("Failed to send stdin back to main thread! {e}");
-                    }
-                    print!("{}", Self::PROMPT);
-                    std::io::stdout().flush().unwrap();
-                }
-                Err(TryRecvError::Empty) => (),
-                Err(TryRecvError::Disconnected) => {
-                    eprintln!("stdin channel closed! Did the thread die?")
-                }
-            }
-
-            match self.rx.try_recv() {
-                Ok(Message::Normal(line)) => {
-                    print!("\r{line}\n{}", Self::PROMPT);
-                    std::io::stdout().flush().unwrap();
-                }
-                Ok(Message::Error(error)) => {
-                    print!("\r{error}\n{}", Self::PROMPT);
-                    std::io::stdout().flush().unwrap();
-                }
-                Err(TryRecvError::Disconnected) => {
-                    eprintln!("log channel closed! What happened?")
-                }
-                Err(TryRecvError::Empty) => std::thread::sleep(Duration::from_micros(100)),
-            }
-        }
-    }
-
-    fn do_stdin(tx: Sender<String>) -> std::thread::JoinHandle<()> {
-        std::thread::spawn(move || loop {
-            let mut buf = String::new();
-            std::io::stdin().read_line(&mut buf).unwrap();
-
-            match tx.send(buf) {
-                Ok(_) => (),
-                Err(e) => {
-                    eprintln!("stdin transmit channel broke! {e}");
-                    break;
-                }
-            }
-        })
-    }
-}
-
-enum Message {
-    Error(String),
-    Normal(String),
 }
 
 struct Image8 {
@@ -346,6 +271,11 @@ impl EditingImage {
         self.kilobytes() / 1024
     }
 
+    pub fn black_levels(&mut self, black_levels: Option<Color<u16>>) {
+        self.black_levels = black_levels;
+        self.step1();
+    }
+
     pub fn exposure(&mut self, exposure: Option<f32>) {
         self.exposure = exposure;
         self.step1();
@@ -427,7 +357,7 @@ impl EditingImageBuilder {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct Color<T: Copy> {
+pub struct Color<T: Copy> {
     r: T,
     g: T,
     b: T,

@@ -11,11 +11,11 @@ getopts = "0.2"
 rawproc = { path = "../rawproc" }
 image = { version = "0.23", default-features = false, features = ["jpeg", "png"] }
 threadpool = "1.8.1"
-termion = { version = "1.5.6", optional = true }
+crossterm = { version = "0.25.0", optional = true }
 give = { path = "../give", optional = true }
 #tokio = { version = "1.21.2", features = ["rt", "io-std"], optional = true }
 colorogram = { path = "../colorogram", optional = true }
 
 [features]
 default = ["tui"]
-tui = ["termion", "give", "colorogram"]#, "tokio"]
+tui = ["crossterm", "give", "colorogram"]#, "tokio"]
