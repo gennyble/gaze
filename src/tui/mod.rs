@@ -1,4 +1,5 @@
 mod interface;
+mod operation;
 
 use std::{
     io::{stdout, Write},
@@ -64,6 +65,10 @@ impl Tui {
         let cmd = Interface::new(command_tx, stdout_rx);
         let command_join = std::thread::spawn(|| cmd.run());
 
+        stdout_tx
+            .send(Message::Cache(self.image.major_size()))
+            .unwrap();
+
         loop {
             match command_rx.try_recv() {
                 Ok(line) => {
@@ -125,6 +130,18 @@ impl Tui {
                 self.image.exposure(Some(ev));
                 self.image_changed()
             }
+            OperationMessage::Brightness(b) => {
+                self.image.brightness(Some(b));
+                self.image_changed()
+            }
+            OperationMessage::Saturation(s) => {
+                self.image.saturation(Some(s));
+                self.image_changed()
+            }
+            OperationMessage::Contrast(c) => {
+                self.image.contrast(Some(c));
+                self.image_changed()
+            }
             OperationMessage::Shutdown => return true,
             OperationMessage::Save => {
                 let start = Instant::now();
@@ -145,8 +162,12 @@ impl Tui {
                     self.image.contrast,
                 );
 
-                let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> =
-                    ImageBuffer::from_raw(step3.meta.width, step3.meta.height, step3.data).unwrap();
+                let imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(
+                    self.image.raw.meta.width,
+                    self.image.raw.meta.height,
+                    self.image.done.data.clone(),
+                )
+                .unwrap();
                 imgbuf
                     .save_with_format(&self.out_path, self.out_type)
                     .unwrap();
@@ -281,6 +302,21 @@ impl EditingImage {
         self.step1();
     }
 
+    pub fn brightness(&mut self, brightness: Option<f32>) {
+        self.brightness = brightness;
+        self.step3();
+    }
+
+    pub fn saturation(&mut self, saturation: Option<f32>) {
+        self.saturation = saturation;
+        self.step3();
+    }
+
+    pub fn contrast(&mut self, contrast: Option<f32>) {
+        self.contrast = contrast;
+        self.step3();
+    }
+
     /// Run step1 and everything above
     fn step1(&mut self) {
         let adjusted = step1(
@@ -299,6 +335,16 @@ impl EditingImage {
 
         self.adjusted = adjusted;
         self.srgb = srgb;
+        self.done = done;
+    }
+
+    fn step3(&mut self) {
+        let done = step3(
+            self.srgb.clone(),
+            self.brightness,
+            self.saturation,
+            self.contrast,
+        );
         self.done = done;
     }
 }
