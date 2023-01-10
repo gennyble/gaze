@@ -1,7 +1,7 @@
 [package]
-name = "easyraw"
+name = "gaze"
 version = "0.1.1"
-authors = ["Genevive <gen@nyble.dev>"]
+authors = ["Genevieve <gen@nyble.dev>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
