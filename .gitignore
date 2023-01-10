@@ -1,4 +1,8 @@
+.DS_Store
+
 /target
 
 *.jpg
 *.png
+
+testfiles.zip

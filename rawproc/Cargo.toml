@@ -1,0 +1,21 @@
+[package]
+name = "rawproc"
+version = "0.1.0"
+authors = ["Genevive <gen@nyble.dev>"]
+edition = "2018"
+
+[dependencies]
+num-traits = "0.2.14"
+rawloader = "0.37.1"
+nalgebra = "0.31.4"
+thiserror = "1.0.38"
+
+[dependencies.rand]
+version = "0.8.5"
+features = ["min_const_gen"]
+
+[dev-dependencies]
+jpeg-encoder = "0.5.1"
+
+[[example]]
+name = "raw_decode"

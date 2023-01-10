@@ -1,0 +1,17 @@
+/target
+Cargo.lock
+
+# Image files
+*.png
+*.jpg
+
+# Test NEF files and darktables XMP
+*.NEF
+*.xmp
+tests/output
+tests/raw
+
+# Leave me alone perf files!
+perf.data
+flamegraph.svg
+/.vscode
