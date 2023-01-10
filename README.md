@@ -1,9 +1,11 @@
-# easyraw
+# gaze
+An image processing program that lives in the terminal.
 
-A CLI (and hopefully soon graphical) program to process raw images and be as user friendly as
-possible.
+## Structure
+This repository contains gaze itself and a few other crates and tools that are tightly linked to it. The repository root is `gaze` itself; `/src` is gaze.
 
-If you're looking for a library to do this, you might want to have a look at the crate that powers
-this program: [rawproc][rawproc-github]
+### `rawproc` ([readme](rawproc/README.md))
+The crate containing the algorithms et al. for gaze.
 
-[rawproc-github]: https://github.com/gennyble/rawproc
+### `img2curve` ([readme](img2curve/README.md))
+We don't yet have a GUI for applying a tone curve, so this is a little tool that converts an image into a line-separated file for gaze to read.
