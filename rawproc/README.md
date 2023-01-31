@@ -12,28 +12,9 @@ good example.
 
 [easyraw-github]: https://github.com/gennyble/easyraw
 
+I want to try and do color stuff myself, but if I get stuck I will probably look at palette ([github](https://github.com/Ogeon/palette))
+
 ## Testing
 The tests and benchmarks require raw files that I don't want to stuff into this repository because
 of their size. They are located here: <https://nyble.dev/rawproc/testfiles.zip>. Extract that to
 `tests`. It should look like `tests/raw/<lots of raw images>`.
-
-## Operations
-
-Going from a `SensorImage<f32>` to an `RgbImage<f32>`.
-```rust
-use rawproc::{debayer::{Debayer, Interpolation};
-
-Debayer::new(sensor_floats).interpolate(Interpolation::Bilinear);
-```
-
-| Image Op.       | Rgb     | Hsv     | Gray    | Sensor       |
-| --------------- | ------- | ------- | ------- | ------------ |
-| Black Level     | x       | x       | x       | u8, u16, f32 |
-| White Balance   | x       | x       | x       | f32          |
-| Exposure        | x       | x       | x       | f32          |
-| Simple Gamma    | x       | x       | x       | f32          |
-| Hue Shift       | x       | f32     | x       | x            |
-| Saturation      | x       | f32     | x       | x            |
-| Brightness      | x       | f32     | x       | x            |
-| sRGB Conversion | f32     | x       | x       | x            |
-| Contrast        | f32     | x       | x       | x            |

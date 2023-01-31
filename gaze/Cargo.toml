@@ -8,11 +8,11 @@ edition = "2018"
 
 [dependencies]
 getopts = "0.2"
-rawproc = { path = "rawproc" }
+rawproc = { path = "../rawproc" }
 image = { version = "0.23", default-features = false, features = ["jpeg", "png"] }
 threadpool = "1.8.1"
 termion = { version = "1.5.6", optional = true }
-give = { path = "../give", optional = true }
+give = { path = "../../give", optional = true }
 
 [features]
 default = ["tui"]

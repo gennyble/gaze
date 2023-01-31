@@ -1,8 +1,8 @@
 [package]
 name = "rawproc"
 version = "0.1.0"
-authors = ["Genevive <gen@nyble.dev>"]
-edition = "2018"
+authors = ["gennyble <gen@nyble.dev>"]
+edition = "2021"
 
 [dependencies]
 num-traits = "0.2.14"
@@ -16,6 +16,10 @@ features = ["min_const_gen"]
 
 [dev-dependencies]
 jpeg-encoder = "0.5.1"
+png = "0.17.7"
+
+#[[example]]
+#name = "raw_decode"
 
 [[example]]
-name = "raw_decode"
+name = "ahh"

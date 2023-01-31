@@ -1,68 +1,61 @@
-pub mod algorithm;
-pub mod debayer;
-pub mod image;
+mod colorspace;
+mod image;
 
-use image::SensorImage;
-use rawloader::RawImageData;
+use std::io::Read;
 
-use crate::image::{Metadata, CFA};
+use colorspace::BayerRgb;
+use image::{Image, RawMetadata};
+use rawloader::{RawImageData, RawLoaderError};
 
-pub fn read_file(filename: &str) -> SensorImage<u16> {
-	// Raw NEF data
-	let decoded = rawloader::decode_file(filename).unwrap();
-	let sensor_data = if let RawImageData::Integer(v) = decoded.data {
-		v
-	} else {
-		panic!()
+use crate::image::Crop;
+
+pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
+	let image = rawloader::decode(reader)?;
+
+	// the whitebalance and a few other values are apparently RGBE, which is RGB
+	// with a shared exponent. It's weird and I don't entirely understand how to
+	// un E then RGB, but I don't have to? wb_coeffs is hardcoded in rawloader to
+	// have the E bit as NaN. whitelevels, which is supposed to be RGBE, too, has
+	// a constant value of 3880 on every component for me? Even E, which is maybe
+	// a little weird.
+	//GEN
+	// It's not RGBE with E for exponont. RGBE with E for Emerald! Blame sony. Also:
+	// https://en.wikipedia.org/wiki/CYGM_filter
+	// http://camera-wiki.org/wiki/Canon_PowerShot_Pro70
+	// https://www.snappiness.space/testing-the-only-rgbe-sensor-ever-made/
+	let wb_coeffs = image.wb_coeffs;
+	let whitebalance = [wb_coeffs[0], wb_coeffs[1], wb_coeffs[2]];
+	let wl = image.whitelevels;
+	let whitelevels = [wl[0], wl[1], wl[2]];
+	let crop = Crop::from_css_quad(image.crops);
+
+	let metadata = RawMetadata {
+		whitebalance,
+		crop,
+		whitelevels,
 	};
 
-	let raw_size = decoded.width * decoded.height;
-	let image_size = sizes.width as usize * sizes.height as usize;
+	let data = match image.data {
+		RawImageData::Float(_) => return Err(Error::FloatImageData),
+		RawImageData::Integer(intu16) => intu16,
+	};
 
-	// TODO: Move to own function, call `extract_meaningful_image` maybe?
-	if raw_size != image_size {
-		let mut image = Vec::with_capacity(image_size);
+	Ok(Image {
+		width: image.width,
+		height: image.height,
+		colorspace: BayerRgb { metadata },
 
-		// FIXME: Assumes the extra data is to the right and/or bottom
-		for row in sizes.top_margin as usize..sizes.top_margin as usize + sizes.height as usize {
-			let lower = row * sizes.raw_width as usize + sizes.left_margin as usize;
-			let upper = lower + sizes.width as usize;
+		data,
+	})
+}
 
-			image.extend_from_slice(&sensor_data[lower..upper]);
-		}
-
-		/*println!(
-			"raw {}x{} - cropped {}x{} - offset {}x{} - eis {} - ais {}",
-			sizes.raw_width,
-			sizes.raw_height,
-			sizes.width,
-			sizes.height,
-			sizes.left_margin,
-			sizes.top_margin,
-			image_size,
-			image.len()
-		);*/
-
-		//FIXME: Assumes CFA:RGGB
-		SensorImage {
-			data: image,
-			meta: Metadata::new(
-				sizes.width as u32,
-				sizes.height as u32,
-				CFA::RGGB,
-				decoded.color(),
-			),
-		}
-	} else {
-		//FIXME: Assumes CFA:RGGB
-		SensorImage {
-			data: sensor_data,
-			meta: Metadata::new(
-				sizes.raw_width as u32,
-				sizes.raw_height as u32,
-				CFA::RGGB,
-				decoded.color(),
-			),
-		}
-	}
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	#[error("{source}")]
+	RawLoaderError {
+		#[from]
+		source: RawLoaderError,
+	},
+	#[error("Raw image data was floats. Please talk to gennyble if you want this supported")]
+	FloatImageData,
 }
