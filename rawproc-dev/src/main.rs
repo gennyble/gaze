@@ -14,12 +14,17 @@ fn main() {
 	raw.crop();
 	p.end(Profile::Crop);
 
+	p.start(Profile::Whitebalance);
+	raw.whitebalance();
+	p.end(Profile::Whitebalance);
+
 	p.start(Profile::Debayer);
 	let rgb = raw.debayer();
 	p.end(Profile::Debayer);
 
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
 	println!("Crop    {}ms", p.elapsed_ms(Profile::Crop).unwrap());
+	println!("W.B.    {}ms", p.elapsed_ms(Profile::Whitebalance).unwrap());
 	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
 
 	let png_img = rgb;
@@ -98,5 +103,6 @@ impl Profiler {
 enum Profile {
 	Decode,
 	Crop,
+	Whitebalance,
 	Debayer,
 }

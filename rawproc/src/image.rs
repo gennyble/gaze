@@ -84,6 +84,10 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 		self.metadata.cfa = self.metadata.cfa.shift(crop.left, crop.top);
 	}
 
+	fn color_at_i(&self, i: usize) -> CfaColor {
+		CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width))
+	}
+
 	pub fn debayer(self) -> Image<T, LinRgb> {
 		let mut rgb = vec![self.data[0]; self.width * self.height * 3];
 
@@ -106,7 +110,7 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 		// We're staying away from the borders for now so we can handle them special later
 		for x in 1..self.width - 1 {
 			for y in 1..self.height - 1 {
-				let mut options = options.clone().into_iter().map(|(x_off, y_off)| {
+				let options = options.clone().into_iter().map(|(x_off, y_off)| {
 					let x = (x as isize + x_off) as usize;
 					let y = (y as isize + y_off) as usize;
 					(CfaColor::from(cfa.color_at(x, y)), x, y)
@@ -142,6 +146,20 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 			metadata: self.metadata,
 			data: rgb,
 			phantom: Default::default(),
+		}
+	}
+}
+
+impl Image<u16, BayerRgb> {
+	pub fn whitebalance(&mut self) {
+		let wb = self.metadata.whitebalance;
+		for (i, light) in self.data.iter_mut().enumerate() {
+			match CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width)) {
+				CfaColor::Red => *light = (*light as f32 * wb[0]) as u16,
+				CfaColor::Green => *light = (*light as f32 * wb[1]) as u16,
+				CfaColor::Blue => *light = (*light as f32 * wb[2]) as u16,
+				CfaColor::Emerald => unreachable!(),
+			}
 		}
 	}
 }
