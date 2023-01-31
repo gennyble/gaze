@@ -5,6 +5,7 @@ use std::io::Read;
 
 use colorspace::BayerRgb;
 use image::{Image, RawMetadata};
+use rand::{thread_rng, Rng};
 use rawloader::{RawImageData, RawLoaderError};
 
 use crate::image::Crop;
@@ -33,6 +34,7 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 		whitebalance,
 		crop,
 		whitelevels,
+		cfa: image.cfa,
 	};
 
 	let data = match image.data {
@@ -43,7 +45,8 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 	Ok(Image {
 		width: image.width,
 		height: image.height,
-		colorspace: BayerRgb { metadata },
+		metadata,
+		phantom: Default::default(),
 
 		data,
 	})
@@ -58,4 +61,35 @@ pub enum Error {
 	},
 	#[error("Raw image data was floats. Please talk to gennyble if you want this supported")]
 	FloatImageData,
+}
+
+struct RollingRandom {
+	values: [u8; Self::BUCKET_SIZE],
+	index: u16,
+}
+
+impl RollingRandom {
+	const BUCKET_SIZE: usize = 1024;
+
+	pub fn new() -> Self {
+		let mut values = [0u8; Self::BUCKET_SIZE];
+		thread_rng().fill(&mut values[..]);
+
+		Self { values, index: 0 }
+	}
+
+	pub fn random_bool(&mut self) -> bool {
+		self.random_u8() % 2 == 0
+	}
+
+	pub fn random_u8(&mut self) -> u8 {
+		let value = self.values[self.index as usize];
+
+		self.index += 1;
+		if self.index as usize >= Self::BUCKET_SIZE {
+			self.index = 0;
+		}
+
+		value
+	}
 }

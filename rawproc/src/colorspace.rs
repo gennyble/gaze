@@ -5,19 +5,21 @@ We need to be able to represent:
 - HSV
 - Non-gamma
 */
-
-use crate::image::RawMetadata;
-
 pub trait Colorspace {
 	/// Number of elements per pixel
 	const COMPONENTS: usize;
 }
 
 /// Straight-from-the-camera colours. Almost certainly linear.
-pub struct BayerRgb {
-	pub metadata: RawMetadata,
-}
+pub struct BayerRgb {}
 
 impl Colorspace for BayerRgb {
 	const COMPONENTS: usize = 1;
+}
+
+/// Linear RGB.
+pub struct LinRgb {}
+
+impl Colorspace for LinRgb {
+	const COMPONENTS: usize = 3;
 }

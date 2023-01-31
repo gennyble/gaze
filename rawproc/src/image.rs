@@ -1,4 +1,11 @@
-use crate::colorspace::{BayerRgb, Colorspace};
+use std::marker::PhantomData;
+
+use rawloader::CFA;
+
+use crate::{
+	colorspace::{BayerRgb, Colorspace, LinRgb},
+	RollingRandom,
+};
 
 pub struct RawMetadata {
 	/// Whitebalance coefficients. Red, green, blue
@@ -6,8 +13,10 @@ pub struct RawMetadata {
 	/// Whitelevel values; the highest per channel value
 	pub whitelevels: [u16; 3],
 	pub crop: Option<Crop>,
+	pub cfa: CFA,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct Crop {
 	pub top: usize,
 	pub right: usize,
@@ -31,23 +40,24 @@ impl Crop {
 	}
 }
 
-pub struct Image<T: Clone, C: Colorspace> {
+pub struct Image<T: Copy + Clone, C: Colorspace> {
 	pub width: usize,
 	pub height: usize,
+	pub metadata: RawMetadata,
 
 	pub data: Vec<T>,
-	pub colorspace: C,
+	pub(crate) phantom: PhantomData<C>,
 }
 
-impl<T: Clone> Image<T, BayerRgb> {
+impl<T: Copy + Clone> Image<T, BayerRgb> {
 	/// Crops the raw image down, removing parts we're supposed to.
 	///
 	/// A camera may cover part of a sensor to gather black level information
 	/// or noise information, and this function removes those parts so we can
 	/// get just the image itself
 	pub fn crop(&mut self) {
-		let crop = if let Some(crop) = self.colorspace.metadata.crop.as_ref() {
-			crop
+		let crop = if let Some(crop) = self.metadata.crop.as_ref() {
+			*crop
 		} else {
 			return;
 		};
@@ -70,6 +80,112 @@ impl<T: Clone> Image<T, BayerRgb> {
 		self.width = new_width;
 		self.height = new_height;
 		self.data = image;
-		self.colorspace.metadata.crop = None;
+		self.metadata.crop = None;
+		self.metadata.cfa = self.metadata.cfa.shift(crop.left, crop.top);
+	}
+
+	pub fn debayer(self) -> Image<T, LinRgb> {
+		let mut rgb = vec![self.data[0]; self.width * self.height * 3];
+
+		let cfa = self.metadata.cfa.clone();
+		let mut rr = RollingRandom::new();
+
+		#[rustfmt::skip]
+		let options = [
+			(-1, -1), (0, -1), (1, -1),
+			(-1, 0),  /*skip*/ (1, 0),
+			(-1, 1),  (0, 1),  (1, 1)
+		];
+
+		let get = |p: (usize, usize)| -> T { self.data[self.width * p.1 + p.0] };
+		let mut set = |x: usize, y: usize, clr: CfaColor, v: T| {
+			rgb[(self.width * y + x) * LinRgb::COMPONENTS + clr.rgb_index()] = v;
+		};
+
+		//TODO: gen- care about the edges of the image
+		// We're staying away from the borders for now so we can handle them special later
+		for x in 1..self.width - 1 {
+			for y in 1..self.height - 1 {
+				let mut options = options.clone().into_iter().map(|(x_off, y_off)| {
+					let x = (x as isize + x_off) as usize;
+					let y = (y as isize + y_off) as usize;
+					(CfaColor::from(cfa.color_at(x, y)), x, y)
+				});
+
+				match CfaColor::from(cfa.color_at(x, y)) {
+					#[rustfmt::skip]
+					CfaColor::Red => {
+						set(x, y, CfaColor::Red, get((x, y)));
+						set(x, y, CfaColor::Green, get(pick_color(&mut rr, options.clone(), CfaColor::Green)));
+						set(x, y, CfaColor::Blue, get(pick_color(&mut rr, options.clone(), CfaColor::Blue)));
+					}
+					#[rustfmt::skip]
+					CfaColor::Blue => {
+						set(x, y, CfaColor::Red, get(pick_color(&mut rr, options.clone(), CfaColor::Red)));
+						set(x, y, CfaColor::Blue, get((x, y)));
+						set(x, y, CfaColor::Green, get(pick_color(&mut rr, options.clone(), CfaColor::Green)));
+					}
+					#[rustfmt::skip]
+					CfaColor::Green => {
+						set(x, y, CfaColor::Red, get(pick_color(&mut rr, options.clone(), CfaColor::Red)));
+						set(x, y, CfaColor::Blue, get(pick_color(&mut rr, options.clone(), CfaColor::Blue)));
+						set(x, y, CfaColor::Green, get((x, y)));
+					}
+					CfaColor::Emerald => unreachable!(),
+				}
+			}
+		}
+
+		Image {
+			width: self.width,
+			height: self.height,
+			metadata: self.metadata,
+			data: rgb,
+			phantom: Default::default(),
+		}
+	}
+}
+
+#[inline]
+fn pick_color<I>(roll: &mut RollingRandom, options: I, color: CfaColor) -> (usize, usize)
+where
+	I: Iterator<Item = (CfaColor, usize, usize)>,
+{
+	let colors: Vec<(CfaColor, usize, usize)> =
+		options.filter(|(clr, _, _)| *clr == color).collect();
+	let random = roll.random_u8() % colors.len() as u8;
+	let red = &colors[random as usize];
+
+	(red.1, red.2)
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum CfaColor {
+	Red,
+	Green,
+	Blue,
+	Emerald,
+}
+
+impl CfaColor {
+	pub fn rgb_index(&self) -> usize {
+		match self {
+			CfaColor::Red => 0,
+			CfaColor::Green => 1,
+			CfaColor::Blue => 2,
+			CfaColor::Emerald => unreachable!(),
+		}
+	}
+}
+
+impl From<usize> for CfaColor {
+	fn from(value: usize) -> Self {
+		match value {
+			0 => CfaColor::Red,
+			1 => CfaColor::Green,
+			2 => CfaColor::Blue,
+			3 => CfaColor::Emerald,
+			_ => unreachable!(),
+		}
 	}
 }
