@@ -138,6 +138,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gifed"
+version = "0.1.0"
+source = "git+https://github.com/gennyble/gifed#0dd0a6c2d910437d040b14994c80468f3bd6fbc7"
+dependencies = [
+ "weezl",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -222,6 +230,7 @@ dependencies = [
 name = "neam"
 version = "0.1.0"
 dependencies = [
+ "gifed",
  "png",
 ]
 
@@ -515,6 +524,12 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
+
+[[package]]
+name = "weezl"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
 
 [[package]]
 name = "wide"

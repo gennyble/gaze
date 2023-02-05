@@ -1,53 +1,9 @@
-use std::marker::PhantomData;
-
-use rawloader::CFA;
-
 use crate::{
 	colorspace::{BayerRgb, Colorspace, LinRgb},
 	RollingRandom,
 };
 
-pub struct RawMetadata {
-	/// Whitebalance coefficients. Red, green, blue
-	pub whitebalance: [f32; 3],
-	/// Whitelevel values; the highest per channel value
-	pub whitelevels: [u16; 3],
-	pub crop: Option<Crop>,
-	pub cfa: CFA,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct Crop {
-	pub top: usize,
-	pub right: usize,
-	pub bottom: usize,
-	pub left: usize,
-}
-
-impl Crop {
-	/// The provided array should be in the order of top, right, bottom, left. If all are 0, None is returned.
-	pub fn from_css_quad(v: [usize; 4]) -> Option<Self> {
-		if v.iter().sum::<usize>() != 0 {
-			Some(Self {
-				top: v[0],
-				right: v[1],
-				bottom: v[2],
-				left: v[3],
-			})
-		} else {
-			None
-		}
-	}
-}
-
-pub struct Image<T: Copy + Clone, C: Colorspace> {
-	pub width: usize,
-	pub height: usize,
-	pub metadata: RawMetadata,
-
-	pub data: Vec<T>,
-	pub(crate) phantom: PhantomData<C>,
-}
+use super::Image;
 
 impl<T: Copy + Clone> Image<T, BayerRgb> {
 	/// Crops the raw image down, removing parts we're supposed to.
@@ -150,6 +106,20 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 	}
 }
 
+impl Image<f32, BayerRgb> {
+	pub fn whitebalance(&mut self) {
+		let wb = self.metadata.whitebalance;
+		for (i, light) in self.data.iter_mut().enumerate() {
+			match CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width)) {
+				CfaColor::Red => *light = *light as f32 * wb[0],
+				CfaColor::Green => *light = *light as f32 * wb[1],
+				CfaColor::Blue => *light = *light as f32 * wb[2],
+				CfaColor::Emerald => unreachable!(),
+			}
+		}
+	}
+}
+
 impl Image<u16, BayerRgb> {
 	pub fn whitebalance(&mut self) {
 		let wb = self.metadata.whitebalance;
@@ -158,6 +128,20 @@ impl Image<u16, BayerRgb> {
 				CfaColor::Red => *light = (*light as f32 * wb[0]) as u16,
 				CfaColor::Green => *light = (*light as f32 * wb[1]) as u16,
 				CfaColor::Blue => *light = (*light as f32 * wb[2]) as u16,
+				CfaColor::Emerald => unreachable!(),
+			}
+		}
+	}
+}
+
+impl Image<u8, BayerRgb> {
+	pub fn whitebalance(&mut self) {
+		let wb = self.metadata.whitebalance;
+		for (i, light) in self.data.iter_mut().enumerate() {
+			match CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width)) {
+				CfaColor::Red => *light = (*light as f32 * wb[0]) as u8,
+				CfaColor::Green => *light = (*light as f32 * wb[1]) as u8,
+				CfaColor::Blue => *light = (*light as f32 * wb[2]) as u8,
 				CfaColor::Emerald => unreachable!(),
 			}
 		}

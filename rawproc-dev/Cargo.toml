@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 png = "0.17.7"
 rawproc = { path = "../rawproc" }
-neam = { path= "../../neam" }
+neam = { path= "../../neam/neam" }

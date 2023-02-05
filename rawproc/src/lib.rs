@@ -5,6 +5,7 @@ use std::io::Read;
 
 use colorspace::BayerRgb;
 use image::{Image, RawMetadata};
+use nalgebra::{Matrix1x3, Matrix3, Matrix3x1};
 use rand::{thread_rng, Rng};
 use rawloader::{RawImageData, RawLoaderError};
 
@@ -30,11 +31,62 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 	let whitelevels = [wl[0], wl[1], wl[2]];
 	let crop = Crop::from_css_quad(image.crops);
 
+	let rlm = image.cam_to_xyz_normalized();
+	#[rustfmt::skip]
+	let cam_xyz_rl = Matrix3::new(
+		rlm[0][0], rlm[0][1], rlm[0][2],
+		rlm[1][0], rlm[1][1], rlm[1][2],
+		rlm[2][0], rlm[2][1], rlm[2][2],
+	);
+
+	let rlm = image.xyz_to_cam;
+	#[rustfmt::skip]
+	let xyz_to_cam = Matrix3::new(
+		rlm[0][0], rlm[0][1], rlm[0][2],
+		rlm[1][0], rlm[1][1], rlm[1][2],
+		rlm[2][0], rlm[2][1], rlm[2][2],
+	);
+
+	let wb_large = wb_coeffs[0].max(wb_coeffs[1]).max(wb_coeffs[2]);
+	#[rustfmt::skip]
+	let wb = Matrix3::new(wb_coeffs[0] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[1] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[2] / wb_large);
+
+	let srgb_to_xyz = image::XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
+	println!("sRGB white XYZ: {}", srgb_to_xyz);
+
+	let xyz_to_cam = xyz_to_cam.normalize();
+	let yr = xyz_to_cam.row(1);
+	let unity_xyz = xyz_to_cam / yr[0].max(yr[1]).max(yr[2]);
+	let weirdrlxyz = weird_rawloader_normalize(xyz_to_cam);
+
+	#[rustfmt::skip]
+	let cam_to_xyz = xyz_to_cam.try_inverse().unwrap(); //cam_xyz_rl; //xyz_to_cam.normalize().try_inverse().unwrap();
+													//let cam_to_xyz = cam_to_xyz / cam_to_xyz.row(2).sum();
+	let cam_to_xyz = cam_to_xyz.normalize();
+
+	println!("Y row cam_to_xyz: {}", cam_to_xyz.row(1).sum());
+
+	let cxyz = cam_to_xyz / cam_to_xyz.row(2).sum();
+	//println!("\"corrected\" Y row cam_to_xyz: {}", cxyz.row(2).sum());
+
+	//let a = weird_rawloader_normalize(xyz_to_cam).try_inverse().unwrap() * wb;
+	let white_xyz = cxyz * Matrix3x1::new(1.0, 1.0, 1.0);
+	println!("White XYZ: {white_xyz}");
+	println!("White XYZ Normal: {}", white_xyz.normalize());
+
+	let large = white_xyz[0].max(white_xyz[1]).max(white_xyz[2]);
+	println!("White XYZ compnorm: {}", 100.0 * (white_xyz / large));
+
+	//println!("Camera white coefficients: {:?}", wb_coeffs);
+
+	//println!("{cam_to_xyz}");
+
 	let metadata = RawMetadata {
 		whitebalance,
 		crop,
 		whitelevels,
 		cfa: image.cfa,
+		cam_to_xyz,
 	};
 
 	let data = match image.data {
@@ -92,4 +144,27 @@ impl RollingRandom {
 
 		value
 	}
+}
+
+// Looking into rawloader's source, it does this weird normalization I can't
+// find references to anywhere else. This doesn't seem to be how matricies
+// are normally normalized, but it makes good results? Well, when I put white
+// as (1, 1, 1) in, I get (1,1,1) out which seems ideal for a colorspace that,
+// as far as I can tell, has no reference white applied at all.
+// I will be checking this against darktable.
+fn weird_rawloader_normalize(m: Matrix3<f32>) -> Matrix3<f32> {
+	let yr = m.row(1);
+	let unity = m / yr.sum(); //yr[0].max(yr[1]).max(yr[2]);
+	unity
+	/*
+	let mut terrible_things = m.clone();
+	for row_num in 0..3 {
+		let mut row = terrible_things.row_mut(row_num);
+		let yr = m.row(1);
+		let unity = m / yr[0].max(yr[1]).max(yr[2])
+		*row.get_mut(0).unwrap() = row[0] / sum;
+		*row.get_mut(1).unwrap() = row[1] / sum;
+		*row.get_mut(2).unwrap() = row[2] / sum;
+	}
+	terrible_things*/
 }

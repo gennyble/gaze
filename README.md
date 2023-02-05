@@ -1,3 +1,5 @@
+**currently going through a major refactor everything is quite severely broken, but we're getting more colour accurate so that's cool :D**
+
 # gaze
 An image processing program that lives in the terminal.
 

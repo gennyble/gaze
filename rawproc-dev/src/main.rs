@@ -15,6 +15,7 @@ fn main() {
 	p.end(Profile::Crop);
 
 	p.start(Profile::Whitebalance);
+	// Pre bayer whitebalance
 	raw.whitebalance();
 	p.end(Profile::Whitebalance);
 
@@ -22,34 +23,45 @@ fn main() {
 	let rgb = raw.debayer();
 	p.end(Profile::Debayer);
 
+	let xyz = rgb.to_xyz();
+	let linsrgb = xyz.to_linsrgb();
+	let srgb = linsrgb.gamma();
+
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
 	println!("Crop    {}ms", p.elapsed_ms(Profile::Crop).unwrap());
 	println!("W.B.    {}ms", p.elapsed_ms(Profile::Whitebalance).unwrap());
 	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
 
-	let png_img = rgb;
+	let png_img = srgb;
 	// Write PNG
 	let file = std::fs::File::create(std::env::args().nth(1).unwrap()).unwrap();
-	let mut enc = png::Encoder::new(file, png_img.width as u32, png_img.height as u32);
-	enc.set_color(png::ColorType::Rgb);
-	enc.set_depth(png::BitDepth::Eight);
 
 	// I want it to be 8bit because sixteen is too big file :(
 	let lvl = png_img.metadata.whitelevels[0];
 	let eight: Vec<u8> = png_img
 		.data
 		.into_iter()
-		.map(|pix| ((pix as f32 / lvl as f32) * 256.0) as u8)
+		.map(|pix| ((pix as f32 / lvl as f32) * 255.0) as u8)
 		.collect();
+	let width = png_img.width as u32;
+	let height = png_img.height as u32;
 
-	/*let scaled = neam::nearest(
-		&eight,
-		3,
-		png_img.width as u32,
-		png_img.height as u32,
-		1920,
-		1278,
-	);*/
+	let eight = neam::nearest(&eight, 3, width, height, 1920, 1278);
+	let width = 1920;
+	let height = 1278;
+
+	let mut enc = png::Encoder::new(file, width, height);
+	enc.set_color(png::ColorType::Rgb);
+	enc.set_depth(png::BitDepth::Eight);
+	/*enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
+	let source_chromaticities = png::SourceChromaticities::new(
+		(0.31270, 0.32900),
+		(0.64000, 0.33000),
+		(0.30000, 0.60000),
+		(0.15000, 0.06000),
+	);
+	enc.set_source_chromaticities(source_chromaticities);
+	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);*/
 
 	let mut writer = enc.write_header().unwrap();
 	writer.write_image_data(&eight).unwrap();

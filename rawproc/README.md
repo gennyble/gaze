@@ -9,6 +9,8 @@ I want to try and do color stuff myself, but if I get stuck I will probably look
 - 4.2.1 of [this pdf](https://faculty.kfupm.edu.sa/ics/lahouari/Teaching/colorspacetransform-1.0.pdf)
 - ["Completely Painless Programmer's Guide to XYZ, RGB, ICC, xyY, and TRCs"](https://ninedegreesbelow.com/photography/xyz-rgb.html#xyY)
 - [poynton Color FAQ](http://poynton.ca/notes/colour_and_gamma/ColorFAQ.html)
+- <https://www.strollswithmydog.com/determining-forward-color-matrix/> and the rest of the stuff there.
+- white balance "tint" <https://www.dpreview.com/forums/thread/4385471>
 
 ## Questions still unanswered
 If you know this, think you figured it out, or otherwise just want to email me. Please. My head is exploding and I must know the answers. [gen@nyble.dev](mailto:gen@nyble.dev).
