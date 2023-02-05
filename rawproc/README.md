@@ -10,6 +10,11 @@ I want to try and do color stuff myself, but if I get stuck I will probably look
 - ["Completely Painless Programmer's Guide to XYZ, RGB, ICC, xyY, and TRCs"](https://ninedegreesbelow.com/photography/xyz-rgb.html#xyY)
 - [poynton Color FAQ](http://poynton.ca/notes/colour_and_gamma/ColorFAQ.html)
 
+## Questions still unanswered
+If you know this, think you figured it out, or otherwise just want to email me. Please. My head is exploding and I must know the answers. [gen@nyble.dev](mailto:gen@nyble.dev).
+
+What is "unity" as referenced in poynton's Color FAQ [here](http://poynton.ca/notes/colour_and_gamma/ColorFAQ.html#RTFToC4)?
+
 ## Testing
 The tests and benchmarks require raw files that I don't want to stuff into this repository because
 of their size. They are located here: <https://nyble.dev/rawproc/testfiles.zip>. Extract that to
