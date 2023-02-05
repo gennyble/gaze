@@ -21,6 +21,8 @@ If you know this, think you figured it out, or otherwise just want to email me. 
 
 - Why, when we chromatically adapt during the XYZ -> sRGB transform, does the image come out looking like darktable's "as shot" whitebalance? It's CCT is ~5972K and my xyz->srgb transform *should* be D65 white, so. It's weird that I'm getting the as shot considering I *should* be moving the white point? right???? And if this *is* correct, how do I get darktables result? What are we doing differently?
 
+- It seems that my XYZ -> sRGB and chromatic adaption is off by 4.8% on the blue channel. why? how do I fix this? Is this all rounding related? Is 5% more blue *enough* blue to make ~6000K look like D65?
+
 ## Testing
 The tests and benchmarks require raw files that I don't want to stuff into this repository because
 of their size. They are located here: <https://nyble.dev/rawproc/testfiles.zip>. Extract that to

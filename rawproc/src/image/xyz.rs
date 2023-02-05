@@ -7,7 +7,7 @@ use super::Image;
 impl Image<u16, XYZ> {
 	pub fn to_linsrgb(mut self) -> Image<u16, LinSrgb> {
 		let wb = self.metadata.whitebalance;
-		let cam_reference = (self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0)).normalize();
+		let cam_reference = (self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0));
 		let srgb_reference = XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
 
 		println!("Cam {cam_reference}\nsRGB {srgb_reference}");
@@ -28,13 +28,19 @@ impl Image<u16, XYZ> {
 
 		let adapted = chromatic_adaptation_matrix * cam_reference;
 
+		let white = Matrix3x1::new(1.0, 1.0, 1.0);
+		let cam_full = BRUCE_XYZ_SRGB * (chromatic_adaptation_matrix * cam_reference);
+		let premul_trans = BRUCE_XYZ_SRGB * chromatic_adaptation_matrix;
+		let cam_premul = premul_trans * cam_reference;
+		println!("Cam Full {cam_full}Cam Premull {cam_premul}");
+
 		for px in self.data.chunks_mut(3) {
 			let m = Matrix3x1::new(
 				px[0] as f32 / self.metadata.whitelevels[0] as f32,
 				px[1] as f32 / self.metadata.whitelevels[1] as f32,
 				px[2] as f32 / self.metadata.whitelevels[2] as f32,
 			);
-			let res = BRUCE_XYZ_SRGB * (chromatic_adaptation_matrix * m);
+			let res = premul_trans * m;
 			px[0] = (res[0] * self.metadata.whitelevels[0] as f32) as u16;
 			px[1] = (res[1] * self.metadata.whitelevels[1] as f32) as u16;
 			px[2] = (res[2] * self.metadata.whitelevels[2] as f32) as u16;
