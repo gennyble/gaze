@@ -14,7 +14,18 @@ good example.
 
 I want to try and do color stuff myself, but if I get stuck I will probably look at palette ([github](https://github.com/Ogeon/palette))
 
+- Everything on [brucelindbloom.com](http://www.brucelindbloom.com/). Bruce is a color scientist.
+- 4.2.1 of [this pdf](https://faculty.kfupm.edu.sa/ics/lahouari/Teaching/colorspacetransform-1.0.pdf)
+- ["Completely Painless Programmer's Guide to XYZ, RGB, ICC, xyY, and TRCs"](https://ninedegreesbelow.com/photography/xyz-rgb.html#xyY)
+
 ## Testing
 The tests and benchmarks require raw files that I don't want to stuff into this repository because
 of their size. They are located here: <https://nyble.dev/rawproc/testfiles.zip>. Extract that to
 `tests`. It should look like `tests/raw/<lots of raw images>`.
+
+## Operations
+The three major types we recognize are u8, u16, and f32.
+
+Whitebalance:
+- BayerRgb: u8, u16, f32
+- LinRgb
