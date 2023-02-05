@@ -15,7 +15,11 @@ I want to try and do color stuff myself, but if I get stuck I will probably look
 ## Questions still unanswered
 If you know this, think you figured it out, or otherwise just want to email me. Please. My head is exploding and I must know the answers. [gen@nyble.dev](mailto:gen@nyble.dev).
 
-What is "unity" as referenced in poynton's Color FAQ [here](http://poynton.ca/notes/colour_and_gamma/ColorFAQ.html#RTFToC4)?
+- What is "unity" as referenced in poynton's Color FAQ [here](http://poynton.ca/notes/colour_and_gamma/ColorFAQ.html#RTFToC4)?
+
+**Things I do not currently understand but hope to in time**
+
+- Why, when we chromatically adapt during the XYZ -> sRGB transform, does the image come out looking like darktable's "as shot" whitebalance? It's CCT is ~5972K and my xyz->srgb transform *should* be D65 white, so. It's weird that I'm getting the as shot considering I *should* be moving the white point? right???? And if this *is* correct, how do I get darktables result? What are we doing differently?
 
 ## Testing
 The tests and benchmarks require raw files that I don't want to stuff into this repository because
