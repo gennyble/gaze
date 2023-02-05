@@ -8,7 +8,7 @@ impl Image<u16, XYZ> {
 	pub fn to_linsrgb(mut self) -> Image<u16, LinSrgb> {
 		let wb = self.metadata.whitebalance;
 		let cam_reference = (self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0)).normalize();
-		let srgb_reference = Matrix3x1::new(0.9505, 1.0000, 1.0890); //XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
+		let srgb_reference = XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
 
 		println!("Cam {cam_reference}\nsRGB {srgb_reference}");
 
@@ -23,6 +23,8 @@ impl Image<u16, XYZ> {
 		);
 
 		let chromatic_adaptation_matrix = BRADFORD_INV * difference_matrix * BRADFORD;
+
+		println!("{chromatic_adaptation_matrix}");
 
 		let adapted = chromatic_adaptation_matrix * cam_reference;
 
