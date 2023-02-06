@@ -56,6 +56,22 @@ pub struct Image<T: Copy + Clone, C: Colorspace> {
 }
 
 impl<T: Copy + Clone, C: Colorspace> Image<T, C> {
+	pub fn from_raw_parts(
+		width: usize,
+		height: usize,
+		metadata: RawMetadata,
+		data: Vec<T>,
+	) -> Image<T, C> {
+		//TODO: gen- check data is correct length
+		Image {
+			width,
+			height,
+			metadata,
+			data,
+			phantom: Default::default(),
+		}
+	}
+
 	pub(crate) fn change_colorspace<N: Colorspace>(self, data: Option<Vec<T>>) -> Image<T, N> {
 		Image {
 			width: self.width,

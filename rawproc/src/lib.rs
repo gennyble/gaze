@@ -1,5 +1,5 @@
-mod colorspace;
-mod image;
+pub mod colorspace;
+pub mod image;
 
 use std::io::Read;
 
@@ -50,6 +50,8 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 	let wb_large = wb_coeffs[0].max(wb_coeffs[1]).max(wb_coeffs[2]);
 	#[rustfmt::skip]
 	let wb = Matrix3::new(wb_coeffs[0] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[1] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[2] / wb_large);
+
+	println!("WB {:?}\nWB {wb}", wb_coeffs);
 
 	let srgb_to_xyz = image::XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
 	println!("sRGB white XYZ: {}", srgb_to_xyz);
