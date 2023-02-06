@@ -1,4 +1,7 @@
-use std::{fs::File, io::BufReader};
+use std::{
+	fs::File,
+	io::{BufReader, Write},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
@@ -25,6 +28,8 @@ struct Trichrome {
 	exif: bool,
 	#[arg(short = 'k', long)]
 	bracketed: bool,
+	#[arg(short, long)]
+	output_prefix: Utf8PathBuf,
 }
 
 impl Trichrome {
@@ -132,10 +137,10 @@ fn main() {
 
 	if args.bracketed {
 		println!("Bracketed");
-		bracketed(explicit)
+		bracketed(explicit, args.output_prefix)
 	} else {
 		println!("Trichrome (not bracketed");
-		trichrome(explicit)
+		trichrome(explicit, args.output_prefix)
 	}
 }
 
@@ -204,7 +209,7 @@ fn print_file_exif<P: AsRef<Utf8Path>>(path: P) -> Result<(), exif::Error> {
 	Ok(())
 }
 
-fn bracketed(exposures: Exposures) {
+fn bracketed(exposures: Exposures, prefix: Utf8PathBuf) {
 	let get_raw = |path: &Utf8Path| -> Image<u16, BayerRgb> {
 		let mut file = File::open(path).unwrap();
 		decode(&mut file).unwrap()
@@ -237,10 +242,11 @@ fn bracketed(exposures: Exposures) {
 	Image::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
 	let srgb = linsrgb.gamma();
 
-	png(srgb, "bracketed.png")
+	let tri: TrichromedImage = srgb.into();
+	tri.output_set("bracketed", prefix);
 }
 
-fn trichrome(exposures: Exposures) {
+fn trichrome(exposures: Exposures, prefix: Utf8PathBuf) {
 	let get_raw = |path: &Utf8Path| -> Image<u16, BayerRgb> {
 		let mut file = File::open(path).unwrap();
 		decode(&mut file).unwrap()
@@ -275,7 +281,8 @@ fn trichrome(exposures: Exposures) {
 	let linsrgb = rgb.to_xyz().to_linsrgb();
 	let srgb = linsrgb.gamma();
 
-	png(srgb, "trichrome.png")
+	let tri: TrichromedImage = srgb.into();
+	tri.output_set("trichrome", prefix);
 }
 
 type Raw = Image<u16, BayerRgb>;
@@ -354,32 +361,6 @@ where
 	(picked.1, picked.2)
 }
 
-fn png<P: AsRef<Utf8Path>>(srgb: Image<u16, Srgb>, out: P) {
-	let lvl = srgb.metadata.whitelevels[0];
-	let eight: Vec<u8> = srgb
-		.data
-		.into_iter()
-		.map(|pix| ((pix as f32 / lvl as f32) * 255.0) as u8)
-		.collect();
-
-	let file = std::fs::File::create(out.as_ref()).unwrap();
-	let mut enc = png::Encoder::new(file, srgb.width as u32, srgb.height as u32);
-	enc.set_color(png::ColorType::Rgb);
-	enc.set_depth(png::BitDepth::Eight);
-	/*enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
-	let source_chromaticities = png::SourceChromaticities::new(
-		(0.31270, 0.32900),
-		(0.64000, 0.33000),
-		(0.30000, 0.60000),
-		(0.15000, 0.06000),
-	);
-	enc.set_source_chromaticities(source_chromaticities);
-	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);*/
-
-	let mut writer = enc.write_header().unwrap();
-	writer.write_image_data(&eight).unwrap();
-}
-
 // I carry this struct around with me a lot, lol. I should put it in a crate, but it
 // almost doesn't feel worth it. It's a fast random thing because generating random
 // values is slow. This just allocates a big ol' array and fills it all at once so
@@ -416,5 +397,109 @@ impl RollingRandom {
 		}
 
 		value
+	}
+}
+
+// Oh yeah, this is a great name.
+struct TrichromedImage {
+	width: usize,
+	height: usize,
+	data: Vec<u8>,
+}
+
+impl TrichromedImage {
+	// Make a half-sized image using neam to downscale
+	pub fn half(&self) -> TrichromedImage {
+		// The div by four then scale by 2 is a cheap way to get even dimesnions,
+		// which I very much want for some reason
+		let width = (self.width / 4) * 2;
+		let height = (self.height / 4) * 2;
+		let data = neam::nearest(
+			&self.data,
+			3,
+			self.width as u32,
+			self.height as u32,
+			width as u32,
+			height as u32,
+		);
+
+		Self {
+			width,
+			height,
+			data,
+		}
+	}
+
+	// Save as a PNG
+	pub fn png<P: AsRef<Utf8Path>>(&self, path: P) {
+		let file = std::fs::File::create(path.as_ref()).unwrap();
+		let mut enc = png::Encoder::new(file, self.width as u32, self.height as u32);
+		enc.set_color(png::ColorType::Rgb);
+		enc.set_depth(png::BitDepth::Eight);
+
+		let mut writer = enc.write_header().unwrap();
+		writer.write_image_data(&self.data).unwrap();
+	}
+
+	pub fn jpeg<P: AsRef<Utf8Path>>(&self, path: P, quality: f32) {
+		let mut comp = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_RGB);
+
+		comp.set_size(self.width, self.height);
+		comp.set_quality(quality);
+		comp.set_mem_dest();
+		comp.start_compress();
+		assert!(comp.write_scanlines(&self.data[..]));
+
+		comp.finish_compress();
+
+		let mut file = File::create(path.as_ref()).unwrap();
+		file.write_all(&comp.data_to_vec().unwrap()).unwrap();
+	}
+
+	pub fn webp<P: AsRef<Utf8Path>>(&self, path: P, quality: f32) {
+		let enc = webp::Encoder::from_rgb(&self.data, self.width as u32, self.height as u32);
+		let img = enc.encode(quality);
+
+		let mut file = File::create(path.as_ref()).unwrap();
+		file.write_all(&img).unwrap();
+	}
+
+	pub fn output_set<P: Into<Utf8PathBuf>, S: AsRef<str>>(&self, dir_name: P, prefix: S) {
+		let prefix = prefix.as_ref();
+		let dir_name = dir_name.into();
+
+		if !dir_name.exists() {
+			std::fs::create_dir(&dir_name).unwrap();
+		}
+
+		let make_path =
+			|size: &'static str, ext: &'static str| dir_name.join(format!("{prefix}_{size}.{ext}"));
+
+		self.png(make_path("full", "png"));
+		let half = self.half();
+		half.jpeg(make_path("half", "jpg"), 50.0);
+		half.webp(make_path("half", "webp"), 45.0);
+		let quart = half.half();
+		quart.jpeg(make_path("quarter", "jpg"), 80.0);
+		quart.webp(make_path("quarter", "webp"), 75.0);
+	}
+}
+
+impl From<Image<u16, Srgb>> for TrichromedImage {
+	fn from(srgb: Image<u16, Srgb>) -> Self {
+		// yes I should use the proper whitelevel per channel. but! i do not care!
+		// they're all the same for my camera, and you're too i'd imagine
+		let lvl = srgb.metadata.whitelevels[0];
+		let eight: Vec<u8> = srgb
+			.data
+			.into_iter()
+			.map(|pix| ((pix as f32 / lvl as f32) * 255.0) as u8)
+			.collect();
+
+		Self {
+			width: srgb.width,
+			height: srgb.height,
+			data: eight,
+		}
 	}
 }

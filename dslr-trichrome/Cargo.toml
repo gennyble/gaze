@@ -9,6 +9,9 @@ edition = "2021"
 camino = "1.1.2"
 clap = { version = "4.1.4", features = ["derive"] }
 kamadak-exif = "0.5.5"
+mozjpeg = "0.9.4"
 png = "0.17.7"
 rand = "0.8.5"
 rawproc = { path = "../rawproc" }
+neam = { git = "https://github.com/gennyble/neam" }
+webp = "0.2.2"
