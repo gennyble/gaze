@@ -223,10 +223,18 @@ fn bracketed(exposures: Exposures) {
 	green.crop();
 	blue.crop();
 
-	let rgb = trichrome_debayer(red, green, blue);
+	let mut rgb = trichrome_debayer(red, green, blue);
+
+	// Incrasing exposure
+	let lv = rgb.metadata.whitelevels[0];
+	for light in rgb.data.iter_mut() {
+		*light =
+			(((*light as f32 / lv as f32) * 2f32.powf(2.0)).clamp(0.0, 1.0) * lv as f32) as u16;
+	}
+
 	// I'm just transforing the colorspace here so I can get access to the gamma
-	let linsrgb: Image<u16, LinSrgb> =
-		Image::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
+	let linsrgb: Image<u16, LinSrgb> = //rgb.to_xyz().to_linsrgb();
+	Image::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
 	let srgb = linsrgb.gamma();
 
 	png(srgb, "bracketed.png")
@@ -255,7 +263,15 @@ fn trichrome(exposures: Exposures) {
 	blue.crop();
 	blue.whitebalance();
 
-	let rgb = trichrome_debayer(red, green, blue);
+	let mut rgb = trichrome_debayer(red, green, blue);
+
+	// Incrasing exposure
+	let lv = rgb.metadata.whitelevels[0];
+	for light in rgb.data.iter_mut() {
+		*light =
+			(((*light as f32 / lv as f32) * 2f32.powf(2.0)).clamp(0.0, 1.0) * lv as f32) as u16;
+	}
+
 	let linsrgb = rgb.to_xyz().to_linsrgb();
 	let srgb = linsrgb.gamma();
 
