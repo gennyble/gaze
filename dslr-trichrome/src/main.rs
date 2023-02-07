@@ -30,6 +30,8 @@ struct Trichrome {
 	bracketed: bool,
 	#[arg(short, long)]
 	output_prefix: Utf8PathBuf,
+	#[arg(short = 's', long)]
+	output_set: bool,
 }
 
 impl Trichrome {
@@ -137,10 +139,10 @@ fn main() {
 
 	if args.bracketed {
 		println!("Bracketed");
-		bracketed(explicit, args.output_prefix)
+		bracketed(explicit, args.output_prefix, args.output_set)
 	} else {
 		println!("Trichrome (not bracketed");
-		trichrome(explicit, args.output_prefix)
+		trichrome(explicit, args.output_prefix, args.output_set)
 	}
 }
 
@@ -162,7 +164,10 @@ fn print_exif(exposures: Exposures) {
 	match exposures {
 		Exposures::Directory { files } => {
 			for file in files {
-				print_file_exif(file).unwrap()
+				if let Err(e) = print_file_exif(&file) {
+					eprintln!("Failed {file}: {e}");
+					continue;
+				}
 			}
 		}
 		Exposures::Explicit { red, green, blue } => {
@@ -209,7 +214,7 @@ fn print_file_exif<P: AsRef<Utf8Path>>(path: P) -> Result<(), exif::Error> {
 	Ok(())
 }
 
-fn bracketed(exposures: Exposures, prefix: Utf8PathBuf) {
+fn bracketed(exposures: Exposures, prefix: Utf8PathBuf, set: bool) {
 	let get_raw = |path: &Utf8Path| -> Image<u16, BayerRgb> {
 		let mut file = File::open(path).unwrap();
 		decode(&mut file).unwrap()
@@ -230,7 +235,8 @@ fn bracketed(exposures: Exposures, prefix: Utf8PathBuf) {
 
 	let mut rgb = trichrome_debayer(red, green, blue);
 
-	// Incrasing exposure
+	// Incrasing exposure (this also seems to clip the white square on the color
+	// chart exposures, making it look whiter than it is, oops)
 	let lv = rgb.metadata.whitelevels[0];
 	for light in rgb.data.iter_mut() {
 		*light =
@@ -238,15 +244,18 @@ fn bracketed(exposures: Exposures, prefix: Utf8PathBuf) {
 	}
 
 	// I'm just transforing the colorspace here so I can get access to the gamma
-	let linsrgb: Image<u16, LinSrgb> = //rgb.to_xyz().to_linsrgb();
-	Image::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
-	let srgb = linsrgb.gamma();
+	let lsrgb = Image::<_, LinSrgb>::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
+	let srgb = lsrgb.gamma();
 
 	let tri: TrichromedImage = srgb.into();
-	tri.output_set("bracketed", prefix);
+	if set {
+		tri.output_set("bracketed", prefix);
+	} else {
+		tri.png(format!("{prefix}_bracketed.png"));
+	}
 }
 
-fn trichrome(exposures: Exposures, prefix: Utf8PathBuf) {
+fn trichrome(exposures: Exposures, prefix: Utf8PathBuf, set: bool) {
 	let get_raw = |path: &Utf8Path| -> Image<u16, BayerRgb> {
 		let mut file = File::open(path).unwrap();
 		decode(&mut file).unwrap()
@@ -282,7 +291,11 @@ fn trichrome(exposures: Exposures, prefix: Utf8PathBuf) {
 	let srgb = linsrgb.gamma();
 
 	let tri: TrichromedImage = srgb.into();
-	tri.output_set("trichrome", prefix);
+	if set {
+		tri.output_set("trichrome", prefix);
+	} else {
+		tri.png(format!("{prefix}_trichrome.png"));
+	}
 }
 
 type Raw = Image<u16, BayerRgb>;
