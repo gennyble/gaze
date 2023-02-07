@@ -107,10 +107,10 @@ fn main() {
 		let red = files
 			.iter()
 			.find(|fname| fname.file_stem().unwrap().to_lowercase() == "red");
-		let blue = files
+		let green = files
 			.iter()
 			.find(|fname| fname.file_stem().unwrap().to_lowercase() == "green");
-		let green = files
+		let blue = files
 			.iter()
 			.find(|fname| fname.file_stem().unwrap().to_lowercase() == "blue");
 
@@ -141,7 +141,7 @@ fn main() {
 		println!("Bracketed");
 		bracketed(explicit, args.output_prefix, args.output_set)
 	} else {
-		println!("Trichrome (not bracketed");
+		println!("Trichrome (not bracketed)");
 		trichrome(explicit, args.output_prefix, args.output_set)
 	}
 }
