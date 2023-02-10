@@ -10,7 +10,7 @@ impl Image<u16, XYZ> {
 		let cam_reference = (self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0));
 		let srgb_reference = XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
 
-		println!("Cam {cam_reference}\nsRGB {srgb_reference}");
+		//println!("Cam {cam_reference}\nsRGB {srgb_reference}");
 
 		let cam_cones = BRADFORD * cam_reference;
 		let srgb_cones = BRADFORD * srgb_reference;
@@ -24,7 +24,7 @@ impl Image<u16, XYZ> {
 
 		let chromatic_adaptation_matrix = BRADFORD_INV * difference_matrix * BRADFORD;
 
-		println!("{chromatic_adaptation_matrix}");
+		//println!("{chromatic_adaptation_matrix}");
 
 		let adapted = chromatic_adaptation_matrix * cam_reference;
 
@@ -32,7 +32,7 @@ impl Image<u16, XYZ> {
 		let cam_full = BRUCE_XYZ_SRGB * (chromatic_adaptation_matrix * cam_reference);
 		let premul_trans = BRUCE_XYZ_SRGB * chromatic_adaptation_matrix;
 		let cam_premul = premul_trans * cam_reference;
-		println!("Cam Full {cam_full}Cam Premull {cam_premul}");
+		//println!("Cam Full {cam_full}Cam Premull {cam_premul}");
 
 		for px in self.data.chunks_mut(3) {
 			let m = Matrix3x1::new(

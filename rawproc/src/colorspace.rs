@@ -5,12 +5,13 @@ We need to be able to represent:
 - HSV
 - Non-gamma
 */
-pub trait Colorspace {
+pub trait Colorspace: Clone {
 	/// Number of elements per pixel
 	const COMPONENTS: usize;
 }
 
 /// Straight-from-the-camera colours. Almost certainly linear.
+#[derive(Clone, Debug)]
 pub struct BayerRgb {}
 
 impl Colorspace for BayerRgb {
@@ -18,24 +19,28 @@ impl Colorspace for BayerRgb {
 }
 
 /// Linear RGB.
+#[derive(Clone, Debug)]
 pub struct LinRgb {}
 
 impl Colorspace for LinRgb {
 	const COMPONENTS: usize = 3;
 }
 
+#[derive(Clone, Debug)]
 pub struct XYZ {}
 
 impl Colorspace for XYZ {
 	const COMPONENTS: usize = 3;
 }
 
+#[derive(Clone, Debug)]
 pub struct LinSrgb {}
 
 impl Colorspace for LinSrgb {
 	const COMPONENTS: usize = 3;
 }
 
+#[derive(Clone, Debug)]
 pub struct Srgb {}
 
 impl Colorspace for Srgb {

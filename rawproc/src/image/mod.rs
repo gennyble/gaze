@@ -12,6 +12,7 @@ use rawloader::CFA;
 
 use crate::colorspace::Colorspace;
 
+#[derive(Clone, Debug)]
 pub struct RawMetadata {
 	/// Whitebalance coefficients. Red, green, blue
 	pub whitebalance: [f32; 3],
@@ -46,6 +47,7 @@ impl Crop {
 	}
 }
 
+#[derive(Clone, Debug)]
 pub struct Image<T: Copy + Clone, C: Colorspace> {
 	pub width: usize,
 	pub height: usize,

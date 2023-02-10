@@ -51,10 +51,10 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 	#[rustfmt::skip]
 	let wb = Matrix3::new(wb_coeffs[0] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[1] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[2] / wb_large);
 
-	println!("WB {:?}\nWB {wb}", wb_coeffs);
+	//println!("WB {:?}\nWB {wb}", wb_coeffs);
 
 	let srgb_to_xyz = image::XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
-	println!("sRGB white XYZ: {}", srgb_to_xyz);
+	//println!("sRGB white XYZ: {}", srgb_to_xyz);
 
 	let xyz_to_cam = xyz_to_cam.normalize();
 	let yr = xyz_to_cam.row(1);
@@ -66,18 +66,18 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 													//let cam_to_xyz = cam_to_xyz / cam_to_xyz.row(2).sum();
 	let cam_to_xyz = cam_to_xyz.normalize();
 
-	println!("Y row cam_to_xyz: {}", cam_to_xyz.row(1).sum());
+	//println!("Y row cam_to_xyz: {}", cam_to_xyz.row(1).sum());
 
 	let cxyz = cam_to_xyz / cam_to_xyz.row(2).sum();
 	//println!("\"corrected\" Y row cam_to_xyz: {}", cxyz.row(2).sum());
 
 	//let a = weird_rawloader_normalize(xyz_to_cam).try_inverse().unwrap() * wb;
 	let white_xyz = cxyz * Matrix3x1::new(1.0, 1.0, 1.0);
-	println!("White XYZ: {white_xyz}");
-	println!("White XYZ Normal: {}", white_xyz.normalize());
+	//println!("White XYZ: {white_xyz}");
+	//println!("White XYZ Normal: {}", white_xyz.normalize());
 
 	let large = white_xyz[0].max(white_xyz[1]).max(white_xyz[2]);
-	println!("White XYZ compnorm: {}", 100.0 * (white_xyz / large));
+	//println!("White XYZ compnorm: {}", 100.0 * (white_xyz / large));
 
 	//println!("Camera white coefficients: {:?}", wb_coeffs);
 

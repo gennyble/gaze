@@ -124,12 +124,14 @@ impl Image<u16, BayerRgb> {
 	pub fn whitebalance(&mut self) {
 		let wb = self.metadata.whitebalance;
 		for (i, light) in self.data.iter_mut().enumerate() {
-			match CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width)) {
+			/*match CfaColor::from(self.metadata.cfa.color_at(i % self.width, i / self.width)) {
 				CfaColor::Red => *light = (*light as f32 * wb[0]) as u16,
 				CfaColor::Green => *light = (*light as f32 * wb[1]) as u16,
 				CfaColor::Blue => *light = (*light as f32 * wb[2]) as u16,
 				CfaColor::Emerald => unreachable!(),
-			}
+			}*/
+			*light = (*light as f32
+				* wb[self.metadata.cfa.color_at(i % self.width, i / self.width)]) as u16;
 		}
 	}
 }

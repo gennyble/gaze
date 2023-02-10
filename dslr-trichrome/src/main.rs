@@ -244,7 +244,7 @@ fn bracketed(exposures: Exposures, prefix: Utf8PathBuf, set: bool) {
 	}
 
 	// I'm just transforing the colorspace here so I can get access to the gamma
-	let lsrgb = Image::<_, LinSrgb>::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
+	let lsrgb = rgb.to_xyz().to_linsrgb();
 	let srgb = lsrgb.gamma();
 
 	let tri: TrichromedImage = srgb.into();
