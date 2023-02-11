@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use rawproc::{colorspace::Srgb, decode, image::Image};
+use rawproc::decode;
 
 fn main() {
 	let name = std::env::args()
@@ -17,57 +17,27 @@ fn main() {
 	raw.crop();
 	p.end(Profile::Crop);
 
-	let nowb = raw.clone();
-
 	p.start(Profile::Whitebalance);
 	// Pre bayer whitebalance
-	//raw.whitebalance();
+	raw.whitebalance();
 	p.end(Profile::Whitebalance);
 
 	p.start(Profile::Debayer);
 	let rgb = raw.debayer();
 	p.end(Profile::Debayer);
-	let rgbnowb = nowb.debayer();
 
-	let t = rgb
-		.data
-		.chunks(3)
-		.skip((rgb.width * rgb.height) / 2)
-		.take(5)
-		.fold((0usize, 0usize, 0usize), |(r, g, b), px| {
-			(r + px[0] as usize, g + px[1] as usize, b + px[2] as usize)
-		});
+	p.start(Profile::XyzToSrgb);
+	let xyz = rgb.to_xyz();
+	let linsrgb = xyz.to_linsrgb();
+	let srgb = linsrgb.gamma();
+	p.end(Profile::XyzToSrgb);
 
-	let tnowb = rgbnowb
-		.data
-		.chunks(3)
-		.skip((rgb.width * rgb.height) / 2)
-		.take(5)
-		.fold((0usize, 0usize, 0usize), |(r, g, b), px| {
-			(r + px[0] as usize, g + px[1] as usize, b + px[2] as usize)
-		});
-
-	println!("{name}");
-	println!("\tWB {:?}", rgb.metadata.whitebalance);
-	println!("\tAverage with WB    {}, {}, {}", t.0 / 5, t.1 / 5, t.2 / 5);
-	println!(
-		"\tAverage without WB {}, {}, {}",
-		tnowb.0 / 5,
-		tnowb.1 / 5,
-		tnowb.2 / 5
-	);
-
-	//let xyz = rgb.to_xyz();
-	//let linsrgb = xyz.to_linsrgb();
-	//let srgb = linsrgb.gamma();
-	let srgb: Image<u16, Srgb> =
-		Image::from_raw_parts(rgb.width, rgb.height, rgb.metadata, rgb.data);
-
-	/*println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
+	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
 	println!("Crop    {}ms", p.elapsed_ms(Profile::Crop).unwrap());
 	println!("W.B.    {}ms", p.elapsed_ms(Profile::Whitebalance).unwrap());
-	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());*/
-	//return;
+	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
+	println!("Colours {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
+
 	let png_img = srgb;
 	// Write PNG
 	let file = std::fs::File::create(std::env::args().nth(1).unwrap()).unwrap();
@@ -89,7 +59,7 @@ fn main() {
 	let mut enc = png::Encoder::new(file, width, height);
 	enc.set_color(png::ColorType::Rgb);
 	enc.set_depth(png::BitDepth::Eight);
-	/*enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
+	enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
 	let source_chromaticities = png::SourceChromaticities::new(
 		(0.31270, 0.32900),
 		(0.64000, 0.33000),
@@ -97,15 +67,10 @@ fn main() {
 		(0.15000, 0.06000),
 	);
 	enc.set_source_chromaticities(source_chromaticities);
-	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);*/
+	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);
 
 	let mut writer = enc.write_header().unwrap();
 	writer.write_image_data(&eight).unwrap();
-}
-
-pub fn float2rgbe(r: f32, g: f32, b: f32) -> [u8; 4] {
-	let largest = r.max(g).max(b);
-	todo!()
 }
 
 struct Profiler {
@@ -153,4 +118,5 @@ enum Profile {
 	Crop,
 	Whitebalance,
 	Debayer,
+	XyzToSrgb,
 }
