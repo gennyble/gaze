@@ -11,7 +11,7 @@ impl Image<u16, XYZ> {
 	//trying to chromatically-shove it into D65.
 	pub fn to_linsrgb(mut self) -> Image<u16, LinSrgb> {
 		let cam_reference = self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0);
-		let srgb_reference = XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
+		let srgb_reference = BRUCE_XYZ_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
 
 		let cam_cones = BRADFORD * cam_reference;
 		let srgb_cones = BRADFORD * srgb_reference;
