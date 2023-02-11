@@ -29,7 +29,8 @@ fn main() {
 	p.start(Profile::XyzToSrgb);
 	let xyz = rgb.to_xyz();
 	let linsrgb = xyz.to_linsrgb();
-	let srgb = linsrgb.gamma();
+	let mut srgb = linsrgb.gamma().floats();
+	srgb.contrast(1.1);
 	p.end(Profile::XyzToSrgb);
 
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
@@ -38,21 +39,14 @@ fn main() {
 	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
 	println!("Colours {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
 
-	let png_img = srgb;
+	let png_img = srgb.bytes();
 	// Write PNG
-	let file = std::fs::File::create(std::env::args().nth(1).unwrap()).unwrap();
+	let file = std::fs::File::create(std::env::args().nth(2).unwrap()).unwrap();
 
-	// I want it to be 8bit because sixteen is too big file :(
-	let lvl = png_img.metadata.whitelevels[0];
-	let eight: Vec<u8> = png_img
-		.data
-		.into_iter()
-		.map(|pix| ((pix as f32 / lvl as f32) * 255.0) as u8)
-		.collect();
 	let width = png_img.width as u32;
 	let height = png_img.height as u32;
 
-	let eight = neam::nearest(&eight, 3, width, height, 1920, 1278);
+	let eight = neam::nearest(&png_img.data, 3, width, height, 1920, 1278);
 	let width = 1920;
 	let height = 1278;
 
