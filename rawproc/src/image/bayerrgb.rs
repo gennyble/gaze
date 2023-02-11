@@ -1,3 +1,7 @@
+use std::ops::Range;
+
+use rawloader::CFA;
+
 use crate::{
 	colorspace::{BayerRgb, Colorspace, LinRgb},
 	RollingRandom,
@@ -51,50 +55,102 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 		let mut rr = RollingRandom::new();
 
 		#[rustfmt::skip]
-		let options = [
+		let top_options = [
+			(-1, 0),  /*skip*/ (1, 0),
+			(-1, 1),  (0, 1),  (1, 1)
+		];
+
+		#[rustfmt::skip]
+		let bottom_options = [
+			(-1, -1), (0, -1), (1, -1),
+			(-1, 0),  /*skip*/ (1, 0),
+		];
+
+		#[rustfmt::skip]
+		let left_options = [
+			(0, -1), (1, -1),
+			/*skip*/ (1, 0),
+			(0, 1),  (1, 1)
+		];
+
+		#[rustfmt::skip]
+		let right_options = [
+			(-1, -1), (0, -1),
+			(-1, 0),  /*skip*/
+			(-1, 1),  (0, 1),
+		];
+
+		#[rustfmt::skip]
+		let center_options = [
 			(-1, -1), (0, -1), (1, -1),
 			(-1, 0),  /*skip*/ (1, 0),
 			(-1, 1),  (0, 1),  (1, 1)
 		];
 
-		let get = |p: (usize, usize)| -> T { self.data[self.width * p.1 + p.0] };
-		let mut set = |x: usize, y: usize, clr: CfaColor, v: T| {
-			rgb[(self.width * y + x) * LinRgb::COMPONENTS + clr.rgb_index()] = v;
-		};
+		let topleft_options = [(1, 0), (0, 1), (1, 1)];
+		let topright_options = [(-1, 0), (-1, 1), (0, 1)];
+		let bottomleft_options = [(0, -1), (1, -1), (1, 0)];
+		let bottomright_options = [(-1, -1), (0, -1), (-1, 0)];
+
+		// These used to be closures but rustc was mad about two mutable refs on rgb
+		macro_rules! row {
+			($range:expr, $opt:expr) => {
+				Self::debayer_meat(
+					self.width,
+					&mut rgb,
+					&cfa,
+					&mut rr,
+					self.data.as_slice(),
+					$range,
+					$opt,
+				);
+			};
+		}
+
+		macro_rules! pixel {
+			($idx:expr, $opt:expr) => {
+				Self::debayer_inner(
+					self.width,
+					&mut rgb,
+					&cfa,
+					&mut rr,
+					self.data.as_slice(),
+					$idx,
+					$opt,
+				)
+			};
+		}
 
 		//TODO: gen- care about the edges of the image
 		// We're staying away from the borders for now so we can handle them special later
-		for x in 1..self.width - 1 {
-			for y in 1..self.height - 1 {
-				let options = options.clone().into_iter().map(|(x_off, y_off)| {
-					let x = (x as isize + x_off) as usize;
-					let y = (y as isize + y_off) as usize;
-					(CfaColor::from(cfa.color_at(x, y)), x, y)
-				});
-
-				match CfaColor::from(cfa.color_at(x, y)) {
-					#[rustfmt::skip]
-					CfaColor::Red => {
-						set(x, y, CfaColor::Red, get((x, y)));
-						set(x, y, CfaColor::Green, get(pick_color(&mut rr, options.clone(), CfaColor::Green)));
-						set(x, y, CfaColor::Blue, get(pick_color(&mut rr, options.clone(), CfaColor::Blue)));
-					}
-					#[rustfmt::skip]
-					CfaColor::Blue => {
-						set(x, y, CfaColor::Red, get(pick_color(&mut rr, options.clone(), CfaColor::Red)));
-						set(x, y, CfaColor::Blue, get((x, y)));
-						set(x, y, CfaColor::Green, get(pick_color(&mut rr, options.clone(), CfaColor::Green)));
-					}
-					#[rustfmt::skip]
-					CfaColor::Green => {
-						set(x, y, CfaColor::Red, get(pick_color(&mut rr, options.clone(), CfaColor::Red)));
-						set(x, y, CfaColor::Blue, get(pick_color(&mut rr, options.clone(), CfaColor::Blue)));
-						set(x, y, CfaColor::Green, get((x, y)));
-					}
-					CfaColor::Emerald => unreachable!(),
-				}
-			}
+		for y in 1..self.height - 1 {
+			let range_start = self.width * y + 1;
+			let range_end = self.width * y + (self.width - 1);
+			let range = range_start..range_end;
+			row!(range, &center_options);
 		}
+
+		// Top
+		row!(1..self.width - 1, &top_options);
+
+		// Bottom
+		row!(
+			(self.width * (self.height - 1)) + 1..(self.width * self.height) - 1,
+			&bottom_options
+		);
+
+		for y in 1..self.height - 1 {
+			//left
+			pixel!(self.width * y, &left_options);
+
+			//Right
+			pixel!(self.width * (y + 1) - 1, &right_options);
+		}
+
+		pixel!(0, &topleft_options);
+		pixel!(self.width - 1, &topright_options);
+		pixel!(self.width * (self.height - 1), &bottomleft_options);
+		pixel!(self.width * self.height - 1, &bottomright_options);
 
 		Image {
 			width: self.width,
@@ -102,6 +158,69 @@ impl<T: Copy + Clone> Image<T, BayerRgb> {
 			metadata: self.metadata,
 			data: rgb,
 			phantom: Default::default(),
+		}
+	}
+
+	/// This is a poorly named function.
+	#[inline]
+	fn debayer_meat(
+		width: usize,
+		rgb: &mut Vec<T>,
+		cfa: &CFA,
+		rr: &mut RollingRandom,
+		bayer: &[T],
+		range: Range<usize>,
+		options: &[(isize, isize)],
+	) {
+		for idx in range {
+			Self::debayer_inner(width, rgb, cfa, rr, bayer, idx, options)
+		}
+	}
+
+	#[inline]
+	fn debayer_inner(
+		width: usize,
+		rgb: &mut Vec<T>,
+		cfa: &CFA,
+		rr: &mut RollingRandom,
+		bayer: &[T],
+		idx: usize,
+		options: &[(isize, isize)],
+	) {
+		let get = |p: (usize, usize)| -> T { bayer[width * p.1 + p.0] };
+		let mut set = |x: usize, y: usize, clr: CfaColor, v: T| {
+			rgb[(width * y + x) * LinRgb::COMPONENTS + clr.rgb_index()] = v;
+		};
+
+		let y = idx / width;
+		let x = idx % width;
+
+		let options = options.clone().into_iter().map(|(x_off, y_off)| {
+			let x = (x as isize + x_off) as usize;
+			let y = (y as isize + y_off) as usize;
+			(CfaColor::from(cfa.color_at(x, y)), x, y)
+		});
+
+		match CfaColor::from(cfa.color_at(x, y)) {
+			#[rustfmt::skip]
+				CfaColor::Red => {
+					set(x, y, CfaColor::Red, get((x, y)));
+					set(x, y, CfaColor::Green, get(pick_color(rr, options.clone(), CfaColor::Green)));
+					set(x, y, CfaColor::Blue, get(pick_color(rr, options.clone(), CfaColor::Blue)));
+				}
+			#[rustfmt::skip]
+				CfaColor::Blue => {
+					set(x, y, CfaColor::Red, get(pick_color(rr, options.clone(), CfaColor::Red)));
+					set(x, y, CfaColor::Blue, get((x, y)));
+					set(x, y, CfaColor::Green, get(pick_color(rr, options.clone(), CfaColor::Green)));
+				}
+			#[rustfmt::skip]
+				CfaColor::Green => {
+					set(x, y, CfaColor::Red, get(pick_color(rr, options.clone(), CfaColor::Red)));
+					set(x, y, CfaColor::Blue, get(pick_color(rr, options.clone(), CfaColor::Blue)));
+					set(x, y, CfaColor::Green, get((x, y)));
+				}
+			CfaColor::Emerald => unreachable!(),
 		}
 	}
 }
