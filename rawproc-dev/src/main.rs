@@ -22,6 +22,10 @@ fn main() {
 	raw.whitebalance();
 	p.end(Profile::Whitebalance);
 
+	/*for px in raw.data.iter_mut() {
+		*px = (*px as f32 * 2.5) as u16;
+	}*/
+
 	p.start(Profile::Debayer);
 	let rgb = raw.debayer();
 	p.end(Profile::Debayer);
@@ -31,6 +35,7 @@ fn main() {
 	let linsrgb = xyz.to_linsrgb();
 	let mut srgb = linsrgb.gamma().floats();
 	srgb.contrast(1.1);
+	srgb.autolevel();
 	p.end(Profile::XyzToSrgb);
 
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
@@ -43,12 +48,13 @@ fn main() {
 	// Write PNG
 	let file = std::fs::File::create(std::env::args().nth(2).unwrap()).unwrap();
 
+	let data = png_img.data;
 	let width = png_img.width as u32;
 	let height = png_img.height as u32;
 
-	let eight = neam::nearest(&png_img.data, 3, width, height, 1920, 1278);
+	/*let data = neam::nearest(&png_img.data, 3, width, height, 1920, 1278);
 	let width = 1920;
-	let height = 1278;
+	let height = 1278;*/
 
 	let mut enc = png::Encoder::new(file, width, height);
 	enc.set_color(png::ColorType::Rgb);
@@ -64,7 +70,7 @@ fn main() {
 	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);
 
 	let mut writer = enc.write_header().unwrap();
-	writer.write_image_data(&eight).unwrap();
+	writer.write_image_data(&data).unwrap();
 }
 
 struct Profiler {
