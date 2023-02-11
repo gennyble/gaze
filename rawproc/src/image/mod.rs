@@ -1,6 +1,7 @@
 mod bayerrgb;
 mod linrgb;
 mod linsrgb;
+mod srgb;
 mod xyz;
 
 pub use xyz::XYZ_TO_SRGB;
@@ -10,7 +11,7 @@ use std::marker::PhantomData;
 use nalgebra::Matrix3;
 use rawloader::CFA;
 
-use crate::colorspace::Colorspace;
+use crate::colorspace::{Colorspace, LinSrgb, Srgb};
 
 #[derive(Clone, Debug)]
 pub struct RawMetadata {
@@ -84,3 +85,131 @@ impl<T: Copy + Clone, C: Colorspace> Image<T, C> {
 		}
 	}
 }
+
+impl<T: Copy + Clone, C: Colorspace> Image<T, C>
+where
+	Image<T, C>: Into<Image<f32, C>>,
+{
+	pub fn floats(self) -> Image<f32, C> {
+		self.into()
+	}
+}
+
+impl<T: Copy + Clone, C: Colorspace> Image<T, C>
+where
+	Image<T, C>: Into<Image<u8, C>>,
+{
+	pub fn bytes(self) -> Image<u8, C> {
+		self.into()
+	}
+}
+
+impl<T: Copy + Clone, C: Colorspace> Image<T, C>
+where
+	Image<T, C>: Into<Image<u16, C>>,
+{
+	pub fn sxiteen(self) -> Image<u16, C> {
+		self.into()
+	}
+}
+
+macro_rules! impl_u16_to_f32 {
+	($colorspace:path) => {
+		impl From<Image<u16, $colorspace>> for Image<f32, $colorspace> {
+			fn from(img: Image<u16, $colorspace>) -> Self {
+				let Image {
+					width,
+					height,
+					metadata,
+					data: data_u16,
+					phantom: _phantom,
+				} = img;
+				let levels = metadata.whitelevels;
+
+				let data = data_u16
+					.into_iter()
+					.enumerate()
+					.map(|(idx, sixteen)| {
+						let color_index = idx % 3;
+						sixteen as f32 / levels[color_index] as f32
+					})
+					.collect();
+
+				Image {
+					width,
+					height,
+					metadata,
+					data,
+					phantom: Default::default(),
+				}
+			}
+		}
+	};
+}
+
+impl_u16_to_f32!(Srgb);
+impl_u16_to_f32!(LinSrgb);
+
+macro_rules! impl_f32_to_u8 {
+	($colorspace:path) => {
+		impl From<Image<f32, $colorspace>> for Image<u8, $colorspace> {
+			fn from(img: Image<f32, $colorspace>) -> Self {
+				let Image {
+					width,
+					height,
+					metadata,
+					data: data_u8,
+					phantom: _phantom,
+				} = img;
+
+				let data = data_u8
+					.into_iter()
+					.map(|float| (float * 255.0) as u8)
+					.collect();
+
+				Image {
+					width,
+					height,
+					metadata,
+					data,
+					phantom: Default::default(),
+				}
+			}
+		}
+	};
+}
+
+impl_f32_to_u8!(Srgb);
+impl_f32_to_u8!(LinSrgb);
+
+macro_rules! impl_f32_to_u16 {
+	($colorspace:path) => {
+		impl From<Image<f32, $colorspace>> for Image<u16, $colorspace> {
+			fn from(img: Image<f32, $colorspace>) -> Self {
+				let Image {
+					width,
+					height,
+					metadata,
+					data: data_u8,
+					phantom: _phantom,
+				} = img;
+
+				let data = data_u8
+					.into_iter()
+					.map(|float| (float * u16::MAX as f32) as u16)
+					.collect();
+
+				Image {
+					width,
+					height,
+					metadata,
+					data,
+					phantom: Default::default(),
+				}
+			}
+		}
+	};
+}
+
+impl_f32_to_u16!(Srgb);
+impl_f32_to_u16!(LinSrgb);

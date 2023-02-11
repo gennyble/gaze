@@ -2,6 +2,9 @@
 
 **/target
 
+*.nef
+*.NEF
+
 *.jpg
 *.png
 

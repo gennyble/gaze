@@ -1,3 +1,4 @@
+pub mod algorithms;
 pub mod colorspace;
 pub mod image;
 
