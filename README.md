@@ -6,6 +6,9 @@ An image processing program that lives in the terminal.
 ## Structure
 This repository contains gaze itself and a few other crates and tools that are tightly linked to it. The repository root is `gaze` itself; `/src` is gaze.
 
+### `dslr-trichrome` ([readme](dslr-trichrome/README.md))
+Experiments in weird trichrome using my DSLR.
+
 ### `rawproc` ([readme](rawproc/README.md))
 The crate containing the algorithms et al. for gaze.
 
