@@ -5,12 +5,13 @@ use crate::colorspace::{LinSrgb, XYZ};
 use super::Image;
 
 impl Image<u16, XYZ> {
+	//TODO: gen-
+	//this produces images with a WB of "as shot". it uses the white balance we
+	//get from the camera I guess? I don't know how to make it D65. I'm already
+	//trying to chromatically-shove it into D65.
 	pub fn to_linsrgb(mut self) -> Image<u16, LinSrgb> {
-		let wb = self.metadata.whitebalance;
-		let cam_reference = (self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0));
+		let cam_reference = self.metadata.cam_to_xyz * Matrix3x1::new(1.0, 1.0, 1.0);
 		let srgb_reference = XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
-
-		//println!("Cam {cam_reference}\nsRGB {srgb_reference}");
 
 		let cam_cones = BRADFORD * cam_reference;
 		let srgb_cones = BRADFORD * srgb_reference;
@@ -23,16 +24,7 @@ impl Image<u16, XYZ> {
 		);
 
 		let chromatic_adaptation_matrix = BRADFORD_INV * difference_matrix * BRADFORD;
-
-		//println!("{chromatic_adaptation_matrix}");
-
-		let adapted = chromatic_adaptation_matrix * cam_reference;
-
-		let white = Matrix3x1::new(1.0, 1.0, 1.0);
-		let cam_full = BRUCE_XYZ_SRGB * (chromatic_adaptation_matrix * cam_reference);
 		let premul_trans = BRUCE_XYZ_SRGB * chromatic_adaptation_matrix;
-		let cam_premul = premul_trans * cam_reference;
-		//println!("Cam Full {cam_full}Cam Premull {cam_premul}");
 
 		for px in self.data.chunks_mut(3) {
 			let m = Matrix3x1::new(

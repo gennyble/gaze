@@ -5,7 +5,7 @@ use std::io::Read;
 
 use colorspace::BayerRgb;
 use image::{Image, RawMetadata};
-use nalgebra::{Matrix1x3, Matrix3, Matrix3x1};
+use nalgebra::Matrix3;
 use rand::{thread_rng, Rng};
 use rawloader::{RawImageData, RawLoaderError};
 
@@ -31,14 +31,6 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 	let whitelevels = [wl[0], wl[1], wl[2]];
 	let crop = Crop::from_css_quad(image.crops);
 
-	let rlm = image.cam_to_xyz_normalized();
-	#[rustfmt::skip]
-	let cam_xyz_rl = Matrix3::new(
-		rlm[0][0], rlm[0][1], rlm[0][2],
-		rlm[1][0], rlm[1][1], rlm[1][2],
-		rlm[2][0], rlm[2][1], rlm[2][2],
-	);
-
 	let rlm = image.xyz_to_cam;
 	#[rustfmt::skip]
 	let xyz_to_cam = Matrix3::new(
@@ -47,41 +39,8 @@ pub fn decode<R: Read>(reader: &mut R) -> Result<Image<u16, BayerRgb>, Error> {
 		rlm[2][0], rlm[2][1], rlm[2][2],
 	);
 
-	let wb_large = wb_coeffs[0].max(wb_coeffs[1]).max(wb_coeffs[2]);
 	#[rustfmt::skip]
-	let wb = Matrix3::new(wb_coeffs[0] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[1] / wb_large, 0.0, 0.0, 0.0, wb_coeffs[2] / wb_large);
-
-	//println!("WB {:?}\nWB {wb}", wb_coeffs);
-
-	let srgb_to_xyz = image::XYZ_TO_SRGB.try_inverse().unwrap() * Matrix3x1::new(1.0, 1.0, 1.0);
-	//println!("sRGB white XYZ: {}", srgb_to_xyz);
-
-	let xyz_to_cam = xyz_to_cam.normalize();
-	let yr = xyz_to_cam.row(1);
-	let unity_xyz = xyz_to_cam / yr[0].max(yr[1]).max(yr[2]);
-	let weirdrlxyz = weird_rawloader_normalize(xyz_to_cam);
-
-	#[rustfmt::skip]
-	let cam_to_xyz = xyz_to_cam.try_inverse().unwrap(); //cam_xyz_rl; //xyz_to_cam.normalize().try_inverse().unwrap();
-													//let cam_to_xyz = cam_to_xyz / cam_to_xyz.row(2).sum();
-	let cam_to_xyz = cam_to_xyz.normalize();
-
-	//println!("Y row cam_to_xyz: {}", cam_to_xyz.row(1).sum());
-
-	let cxyz = cam_to_xyz / cam_to_xyz.row(2).sum();
-	//println!("\"corrected\" Y row cam_to_xyz: {}", cxyz.row(2).sum());
-
-	//let a = weird_rawloader_normalize(xyz_to_cam).try_inverse().unwrap() * wb;
-	let white_xyz = cxyz * Matrix3x1::new(1.0, 1.0, 1.0);
-	//println!("White XYZ: {white_xyz}");
-	//println!("White XYZ Normal: {}", white_xyz.normalize());
-
-	let large = white_xyz[0].max(white_xyz[1]).max(white_xyz[2]);
-	//println!("White XYZ compnorm: {}", 100.0 * (white_xyz / large));
-
-	//println!("Camera white coefficients: {:?}", wb_coeffs);
-
-	//println!("{cam_to_xyz}");
+	let cam_to_xyz = xyz_to_cam.try_inverse().unwrap().normalize();
 
 	let metadata = RawMetadata {
 		whitebalance,
