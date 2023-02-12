@@ -1,4 +1,5 @@
 mod bayerrgb;
+mod hsv;
 mod linrgb;
 mod linsrgb;
 mod srgb;
@@ -11,7 +12,7 @@ use std::marker::PhantomData;
 use nalgebra::Matrix3;
 use rawloader::CFA;
 
-use crate::colorspace::{Colorspace, LinSrgb, Srgb};
+use crate::colorspace::{Colorspace, Hsv, LinSrgb, Srgb};
 
 #[derive(Clone, Debug)]
 pub struct RawMetadata {
@@ -181,6 +182,7 @@ macro_rules! impl_f32_to_u8 {
 
 impl_f32_to_u8!(Srgb);
 impl_f32_to_u8!(LinSrgb);
+impl_f32_to_u8!(Hsv);
 
 macro_rules! impl_f32_to_u16 {
 	($colorspace:path) => {

@@ -13,3 +13,5 @@ This assumes the shots have the same exposure and treats it as such. It debayers
 
 #### Bracketed scheme; `-k`
 Hehehehehe. This assumes you exposed each channel to how the camera perceives them. I.E, no white balance is applied. Colours are *as shot*, except we gamma correct them.
+
+I believe this is the most "true to film" experience you can get with trichrome? because you develop the roll of film all at once, so you'd have to expose all your channels correctly.

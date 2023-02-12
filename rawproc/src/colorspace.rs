@@ -46,3 +46,11 @@ pub struct Srgb {}
 impl Colorspace for Srgb {
 	const COMPONENTS: usize = 3;
 }
+
+//TODO: gen- Not really a colorspace but more like, representation?
+#[derive(Clone, Debug)]
+pub struct Hsv {}
+
+impl Colorspace for Hsv {
+	const COMPONENTS: usize = 3;
+}

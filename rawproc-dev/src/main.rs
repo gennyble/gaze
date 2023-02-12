@@ -1,6 +1,10 @@
 use std::time::{Duration, Instant};
 
-use rawproc::decode;
+use rawproc::{
+	colorspace::{Hsv, Srgb},
+	decode,
+	image::Image,
+};
 
 fn main() {
 	let name = std::env::args()
@@ -22,9 +26,11 @@ fn main() {
 	raw.whitebalance();
 	p.end(Profile::Whitebalance);
 
-	/*for px in raw.data.iter_mut() {
-		*px = (*px as f32 * 2.5) as u16;
-	}*/
+	println!("WB {:?}", raw.metadata.whitebalance);
+
+	for px in raw.data.iter_mut() {
+		*px = (*px as f32 * 6.0) as u16;
+	}
 
 	p.start(Profile::Debayer);
 	let rgb = raw.debayer();
@@ -33,9 +39,32 @@ fn main() {
 	p.start(Profile::XyzToSrgb);
 	let xyz = rgb.to_xyz();
 	let linsrgb = xyz.to_linsrgb();
-	let mut srgb = linsrgb.gamma().floats();
+
+	let curve_file = "../curve.lsv";
+	let curve_string = std::fs::read_to_string(curve_file).unwrap();
+	let curve_floats: Vec<f32> = curve_string
+		.lines()
+		.map(|line| line.trim().parse::<f32>().unwrap())
+		.collect();
+
+	let mut flinsrgb = linsrgb.floats();
+	for pixel in flinsrgb.data.iter_mut() {
+		let position = pixel.clamp(0.0, 1.0) * (curve_floats.len() as f32 - 1.0);
+		let start = curve_floats[position.floor() as usize];
+		let end = curve_floats[position.ceil() as usize];
+		let percent = position.fract();
+
+		*pixel = lerp(start, end, percent);
+	}
+
+	let mut srgb = flinsrgb.gamma();
 	srgb.contrast(1.1);
 	srgb.autolevel();
+
+	let mut hsv: Image<f32, Hsv> = srgb.into();
+	hsv.saturation(1.05);
+	let srgb: Image<f32, Srgb> = hsv.into();
+
 	p.end(Profile::XyzToSrgb);
 
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
@@ -119,4 +148,8 @@ enum Profile {
 	Whitebalance,
 	Debayer,
 	XyzToSrgb,
+}
+
+fn lerp(start: f32, end: f32, percent: f32) -> f32 {
+	start + (end - start) * percent
 }
