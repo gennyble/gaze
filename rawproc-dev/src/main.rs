@@ -30,7 +30,8 @@ fn main() {
 	println!("WB {:?}", raw.metadata.whitebalance);
 
 	for px in raw.data.iter_mut() {
-		*px = (*px as f32).powf(1.2) as u16; //(*px as f32 * 6.0) as u16;
+		//*px = (*px as f32).powf(1.0) as u16; //(*px as f32 * 6.0) as u16;
+		*px = ((*px as f32) * 3.0) as u16;
 	}
 
 	p.start(Profile::Debayer);
@@ -59,7 +60,7 @@ fn main() {
 	}
 
 	let mut srgb = flinsrgb.gamma();
-	srgb.contrast(1.1);
+	srgb.contrast(1.05);
 	srgb.autolevel();
 
 	let mut hsv: Image<f32, Hsv> = srgb.into();
@@ -74,21 +75,11 @@ fn main() {
 	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
 	println!("Colours {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
 
-	let png_img = srgb.bytes();
-	let data = png_img.data;
-	let width = png_img.width as u32;
-	let height = png_img.height as u32;
+	let img = srgb.bytes();
 
-	/*let new_width = 1000;
-	let new_height = ((new_width as f32 / width as f32) * height as f32) as u32;
-	let data = neam::nearest(&data, 3, width, height, new_width, new_height);
-	let width = new_width;
-	let height = new_height;*/
-
-	let out = OutImage::new(width as usize, height as usize, data);
+	let out = OutImage::new(img.width, img.height, img.data);
 	let name = std::env::args().nth(2).unwrap();
-	//out.half().jpeg(name, 75.0);
-	out.png(name);
+	out.jpeg(name, 65.0);
 
 	/*let mut enc = png::Encoder::new(file, width, height);
 	enc.set_color(png::ColorType::Rgb);
