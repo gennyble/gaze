@@ -1,0 +1,11 @@
+[package]
+name = "imgout"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mozjpeg = "0.9.4"
+png = "0.17.7"
+webp = "0.2.2"
