@@ -14,3 +14,6 @@ The crate containing the algorithms et al. for gaze.
 
 ### `img2curve` ([readme](img2curve/README.md))
 We don't yet have a GUI for applying a tone curve, so this is a little tool that converts an image into a line-separated file for gaze to read.
+
+### `imgout`
+Responsible for writing PNG, JPEG, and WebP files. Maybe more, later.

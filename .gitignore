@@ -5,9 +5,15 @@
 *.nef
 *.NEF
 
+*.jpeg
 *.jpg
 *.png
+*.webp
 
 testfiles.zip
 
 *.lsv
+
+# lots of files that should not be here
+rawproc-dev/AHH
+mipp

@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use imgout::OutImage;
 use rawproc::{
 	colorspace::{Hsv, Srgb},
 	decode,
@@ -29,7 +30,7 @@ fn main() {
 	println!("WB {:?}", raw.metadata.whitebalance);
 
 	for px in raw.data.iter_mut() {
-		*px = (*px as f32 * 6.0) as u16;
+		*px = (*px as f32).powf(1.2) as u16; //(*px as f32 * 6.0) as u16;
 	}
 
 	p.start(Profile::Debayer);
@@ -74,18 +75,22 @@ fn main() {
 	println!("Colours {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
 
 	let png_img = srgb.bytes();
-	// Write PNG
-	let file = std::fs::File::create(std::env::args().nth(2).unwrap()).unwrap();
-
 	let data = png_img.data;
 	let width = png_img.width as u32;
 	let height = png_img.height as u32;
 
-	/*let data = neam::nearest(&png_img.data, 3, width, height, 1920, 1278);
-	let width = 1920;
-	let height = 1278;*/
+	/*let new_width = 1000;
+	let new_height = ((new_width as f32 / width as f32) * height as f32) as u32;
+	let data = neam::nearest(&data, 3, width, height, new_width, new_height);
+	let width = new_width;
+	let height = new_height;*/
 
-	let mut enc = png::Encoder::new(file, width, height);
+	let out = OutImage::new(width as usize, height as usize, data);
+	let name = std::env::args().nth(2).unwrap();
+	//out.half().jpeg(name, 75.0);
+	out.png(name);
+
+	/*let mut enc = png::Encoder::new(file, width, height);
 	enc.set_color(png::ColorType::Rgb);
 	enc.set_depth(png::BitDepth::Eight);
 	enc.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));
@@ -99,7 +104,7 @@ fn main() {
 	enc.set_srgb(png::SrgbRenderingIntent::Perceptual);
 
 	let mut writer = enc.write_header().unwrap();
-	writer.write_image_data(&data).unwrap();
+	writer.write_image_data(&data).unwrap();*/
 }
 
 struct Profiler {

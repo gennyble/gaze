@@ -9,3 +9,5 @@ edition = "2021"
 png = "0.17.7"
 rawproc = { path = "../rawproc" }
 neam = { path= "../../neam/neam" }
+imgout = { path = "../imgout" }
+camino = "1.1.2"

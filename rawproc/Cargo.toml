@@ -17,9 +17,3 @@ features = ["min_const_gen"]
 [dev-dependencies]
 jpeg-encoder = "0.5.1"
 png = "0.17.7"
-
-#[[example]]
-#name = "raw_decode"
-
-[[example]]
-name = "ahh"
