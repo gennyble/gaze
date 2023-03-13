@@ -1,12 +1,6 @@
 # curver!
 It's a tone curve editor!
 
-<p align="center" style="width: 100%">
-
-![screenshot of curver. there's a bezier curve streaking from the left bottom corner to the top right. two control points, represented as lilac squares, hang in the window area. there is a gentle grey grid in the background dividing the window at quarters of the width and height](screenshot.png)
-
-</p>
-
 Controls!  
 **`**: deselect control point  
 **1**: select first control point  
