@@ -6,3 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+flo_curves = "0.7.0"
+softbuffer = { git = "https://github.com/rust-windowing/softbuffer" }
+winit = "0.28.2"
