@@ -139,14 +139,31 @@ enum SelectedPoint {
 fn draw(buf: &mut Buffer, c1: (f64, f64), c2: (f64, f64), sel: SelectedPoint) {
 	buf.clear();
 
+	let width = buf.width;
+	let height = buf.height;
+
+	// Draw the grid!
+	let gridc = Color::GREY_44;
+
+	let wh = buf.width / 2;
+	let wq = wh / 2;
+
+	buf.vert(wq, 0, height, gridc);
+	buf.vert(wh, 0, height, gridc);
+	buf.vert(wh + wq, 0, height, gridc);
+
+	let hh = buf.height / 2;
+	let hq = hh / 2;
+
+	buf.hori(hq, 0, width, gridc);
+	buf.hori(hh, 0, width, gridc);
+	buf.hori(hh + hq, 0, width, gridc);
+
 	let curve = Curve::from_points(
 		Coord2(0.0, 0.0),
 		(Coord2(c1.0, c1.1), Coord2(c2.0, c2.1)),
 		Coord2(1000.0, 1000.0),
 	);
-
-	let width = buf.width;
-	let height = buf.height;
 
 	for t in 0..width {
 		let normal_t = t as f64 / width as f64;
@@ -271,10 +288,35 @@ impl Buffer {
 	}
 
 	pub fn rect(&mut self, x: usize, y: usize, width: usize, height: usize, c: Color) {
+		//TODO: check x and y are in range before we loop so we don't check every time
 		for px in x..x + width {
 			for py in y..y + height {
 				self.set(px, py, c)
 			}
+		}
+	}
+
+	/// Draw a vertical line :D
+	/// Range is [y_start,y_end). I.E. start is incldued, end is not. If start
+	/// is greater than end, the two are swapped.
+	pub fn vert(&mut self, x: usize, y_start: usize, y_end: usize, c: Color) {
+		let ymin = y_start.min(y_end);
+		let ymax = y_start.max(y_end).clamp(0, self.height);
+
+		for y in ymin..ymax {
+			self.set_unchecked(x, y, c);
+		}
+	}
+
+	/// Draw a horizontal line :D
+	/// Range is [x_start,x_end). I.E. start is included, end is not. If start
+	/// is greater than end, the two are swapped
+	pub fn hori(&mut self, y: usize, x_start: usize, x_end: usize, c: Color) {
+		let xmin = x_start.min(x_end);
+		let xmax = x_start.max(x_end).clamp(0, self.width);
+
+		for x in xmin..xmax {
+			self.set_unchecked(x, y, c);
 		}
 	}
 }
@@ -290,6 +332,8 @@ impl Color {
 	pub const WHITE: Color = Color::new(0xFF, 0xFF, 0xFF);
 	pub const GENTLE_LILAC: Color = Color::new(0xDD, 0xAA, 0xFF);
 	pub const EMU_TURQUOISE: Color = Color::new(0x33, 0xAA, 0x88);
+	pub const GREY_DD: Color = Color::new(0xDD, 0xDD, 0xDD);
+	pub const GREY_44: Color = Color::new(0x44, 0x44, 0x44);
 
 	pub const fn new(r: u8, g: u8, b: u8) -> Self {
 		Color { r, g, b }
