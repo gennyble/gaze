@@ -1,12 +1,8 @@
-use std::num::NonZeroUsize;
-
-use flo_curves::{
-	bezier::{BezierCurve2D, Curve},
-	BezierCurve, BezierCurveFactory, Coord2,
-};
+use flo_curves::{bezier::Curve, BezierCurve, BezierCurveFactory, Coord2};
+use rfd::FileDialog;
 use winit::{
 	dpi::PhysicalSize,
-	event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+	event::{ElementState, Event, VirtualKeyCode, WindowEvent},
 	event_loop::{ControlFlow, EventLoop},
 	window::WindowBuilder,
 };
@@ -29,6 +25,7 @@ fn main() {
 	let mut c1 = (170.0, 670.0);
 	let mut c2 = (830.0, 670.0);
 	let mut selected = SelectedPoint::None;
+	let mut should_open_file_dialog = false;
 
 	// Will it even have an inner size yet? I'm pretty sure we get a resize in
 	// the first bunch of events, so it doesn't matter. but might as well try?
@@ -41,6 +38,13 @@ fn main() {
 			Event::RedrawRequested(_wid) => {
 				draw(&mut buffer, c1, c2, selected);
 				surface.set_buffer(&buffer.data, buffer.width as u16, buffer.height as u16);
+			}
+
+			Event::MainEventsCleared => {
+				if should_open_file_dialog {
+					should_open_file_dialog = false;
+					save_dialog(c1, c2);
+				}
 			}
 
 			Event::WindowEvent {
@@ -73,6 +77,10 @@ fn main() {
 
 				if let Some(VirtualKeyCode::R) = input.virtual_keycode {
 					draw(&mut buffer, c1, c2, selected);
+				}
+
+				if vkc == VirtualKeyCode::S {
+					should_open_file_dialog = true;
 				}
 
 				if let Some(VirtualKeyCode::Key1) = input.virtual_keycode {
@@ -168,6 +176,31 @@ fn draw(buf: &mut Buffer, c1: (f64, f64), c2: (f64, f64), sel: SelectedPoint) {
 		20,
 		c2_color,
 	);
+}
+
+fn save_dialog(c1: (f64, f64), c2: (f64, f64)) {
+	let curve = Curve::from_points(
+		Coord2(0.0, 0.0),
+		(Coord2(c1.0, c1.1), Coord2(c2.0, c2.1)),
+		Coord2(1000.0, 1000.0),
+	);
+
+	let mut buffer = String::new();
+
+	// 12bits!
+	for line in 0..=4095 {
+		let t = line as f64 / 4095.0;
+		let y = curve.point_at_pos(t).1 / 1000.0;
+		buffer.push_str(&format!("{y:.6}\n"));
+	}
+
+	let file = FileDialog::new()
+		.add_filter("Line Separated Value", &["lsv", "txt", ""])
+		.save_file();
+
+	if let Some(path) = file {
+		std::fs::write(path, buffer.as_bytes()).unwrap()
+	}
 }
 
 struct Buffer {
