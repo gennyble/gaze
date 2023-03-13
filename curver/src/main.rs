@@ -66,6 +66,11 @@ fn main() {
 					return;
 				}
 
+				let vkc = match input.virtual_keycode {
+					Some(vkc) => vkc,
+					None => return,
+				};
+
 				if let Some(VirtualKeyCode::R) = input.virtual_keycode {
 					draw(&mut buffer, c1, c2, selected);
 				}
@@ -81,6 +86,20 @@ fn main() {
 				if let Some(VirtualKeyCode::Grave) = input.virtual_keycode {
 					println!("💀");
 					selected = SelectedPoint::None;
+				}
+
+				let point = match selected {
+					SelectedPoint::Control1 => &mut c1,
+					SelectedPoint::Control2 => &mut c2,
+					_ => return,
+				};
+
+				match vkc {
+					VirtualKeyCode::Up => point.1 += 10.0,
+					VirtualKeyCode::Down => point.1 -= 10.0,
+					VirtualKeyCode::Left => point.0 -= 10.0,
+					VirtualKeyCode::Right => point.0 += 10.0,
+					_ => (),
 				}
 
 				window.request_redraw();
