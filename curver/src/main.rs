@@ -26,6 +26,7 @@ fn main() {
 	let mut c2 = (830.0, 670.0);
 	let mut selected = SelectedPoint::None;
 	let mut should_open_file_dialog = false;
+	let mut unsaved_changes = false;
 
 	// Will it even have an inner size yet? I'm pretty sure we get a resize in
 	// the first bunch of events, so it doesn't matter. but might as well try?
@@ -43,7 +44,12 @@ fn main() {
 			Event::MainEventsCleared => {
 				if should_open_file_dialog {
 					should_open_file_dialog = false;
-					save_dialog(c1, c2);
+
+					save_dialog(c1, c2, &mut unsaved_changes);
+
+					if !unsaved_changes {
+						window.set_title("curver");
+					}
 				}
 			}
 
@@ -108,6 +114,11 @@ fn main() {
 					VirtualKeyCode::Left => point.0 -= 10.0,
 					VirtualKeyCode::Right => point.0 += 10.0,
 					_ => (),
+				}
+
+				if !unsaved_changes {
+					window.set_title("curver - unsaved changes");
+					unsaved_changes = true;
 				}
 
 				window.request_redraw();
@@ -178,7 +189,7 @@ fn draw(buf: &mut Buffer, c1: (f64, f64), c2: (f64, f64), sel: SelectedPoint) {
 	);
 }
 
-fn save_dialog(c1: (f64, f64), c2: (f64, f64)) {
+fn save_dialog(c1: (f64, f64), c2: (f64, f64), unsaved: &mut bool) {
 	let curve = Curve::from_points(
 		Coord2(0.0, 0.0),
 		(Coord2(c1.0, c1.1), Coord2(c2.0, c2.1)),
@@ -199,7 +210,8 @@ fn save_dialog(c1: (f64, f64), c2: (f64, f64)) {
 		.save_file();
 
 	if let Some(path) = file {
-		std::fs::write(path, buffer.as_bytes()).unwrap()
+		std::fs::write(path, buffer.as_bytes()).unwrap();
+		*unsaved = false;
 	}
 }
 
