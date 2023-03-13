@@ -81,7 +81,7 @@ fn main() {
 					None => return,
 				};
 
-				if let Some(VirtualKeyCode::R) = input.virtual_keycode {
+				if vkc == VirtualKeyCode::R {
 					draw(&mut buffer, c1, c2, selected);
 				}
 
@@ -89,17 +89,11 @@ fn main() {
 					should_open_file_dialog = true;
 				}
 
-				if let Some(VirtualKeyCode::Key1) = input.virtual_keycode {
-					selected = SelectedPoint::Control1;
-				}
-
-				if let Some(VirtualKeyCode::Key2) = input.virtual_keycode {
-					selected = SelectedPoint::Control2;
-				}
-
-				if let Some(VirtualKeyCode::Grave) = input.virtual_keycode {
-					println!("💀");
-					selected = SelectedPoint::None;
+				match vkc {
+					VirtualKeyCode::Key1 => selected = SelectedPoint::Control1,
+					VirtualKeyCode::Key2 => selected = SelectedPoint::Control2,
+					VirtualKeyCode::Grave => selected = SelectedPoint::None,
+					_ => (),
 				}
 
 				let point = match selected {
