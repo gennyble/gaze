@@ -19,6 +19,9 @@ The crate containing the algorithms et al. for gaze.
 ### `imgout`
 Responsible for writing PNG, JPEG, and WebP files. Maybe more, later.
 
+### `fluffy`
+Image drawing thing for use with softbuffer.
+
 ---
 
 ### `dslr-trichrome` ([readme](dslr-trichrome/README.md))

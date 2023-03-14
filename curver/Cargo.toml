@@ -10,3 +10,4 @@ flo_curves = "0.7.0"
 rfd = "0.11.2"
 softbuffer = { git = "https://github.com/rust-windowing/softbuffer" }
 winit = "0.28.2"
+fluffy = { path = "../fluffy", features = ["winit"] }

@@ -260,6 +260,7 @@ name = "curver"
 version = "0.1.0"
 dependencies = [
  "flo_curves",
+ "fluffy",
  "rfd",
  "softbuffer",
  "winit",
@@ -320,6 +321,13 @@ dependencies = [
  "itertools",
  "roots",
  "smallvec",
+]
+
+[[package]]
+name = "fluffy"
+version = "0.1.0"
+dependencies = [
+ "winit",
 ]
 
 [[package]]
