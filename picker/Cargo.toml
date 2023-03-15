@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 softbuffer = { git = "https://github.com/rust-windowing/softbuffer" }
 winit = "0.28.2"
-fluffy = { path = "../fluffy", features = ["winit"] }
+fluffy = { path = "../fluffy" }
+neam = { path = "../../neam/neam" }

@@ -1,4 +1,4 @@
-use fluffy::Buffer;
+use fluffy::{Buffer, FluffyWindow};
 use winit::{
 	dpi::PhysicalSize,
 	event::{Event, WindowEvent},
@@ -9,55 +9,64 @@ use winit::{
 fn main() {
 	println!("HI :D");
 
-	let event_loop = EventLoop::new();
-	let window = WindowBuilder::new()
+	let builder = WindowBuilder::new()
 		.with_inner_size(PhysicalSize::new(640, 480))
-		.with_title("picker")
-		.build(&event_loop)
-		.unwrap();
+		.with_title("picker");
 
-	let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
-	let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
+	let mut fluff = FluffyWindow::build_window(builder);
 
-	let mut buffer = Buffer::new(0, 0);
+	// Create test image
+	let mut img = fluff.buffer.data.clone();
+	img.iter_mut().enumerate().for_each(|(idx, px)| {
+		let red = idx % 256;
+		let blue = (idx / 256) % 256;
+		let green = (idx / (256 * 256)) % 256;
 
-	// it panic if we don't do this.
-	buffer.resize_from_physical(window.inner_size());
+		*px = u32::from_be_bytes([0, red as u8, green as u8, blue as u8])
+	});
 
 	println!("Initialized");
 
+	let event_loop = fluff.take_el();
 	event_loop.run(move |event, _, flow| {
 		*flow = ControlFlow::Wait;
 
+		fluff.common_events(&event, flow);
+
 		match event {
 			Event::RedrawRequested(_wid) => {
-				println!("{} {}x{}", buffer.data.len(), buffer.width, buffer.height);
-				surface.set_buffer(&buffer.data, buffer.width as u16, buffer.height as u16);
-			}
+				/*
+					Woah woah woah, okay. Hey gen! how do we want this to work?
 
-			Event::MainEventsCleared => {}
+					Well, I think this is how:
+					The user can "window select" an area that they want to fill the screen. We then
+					have to find the side that is the least different (division?) from it's
+					associated dimension, width/height, and scale both sides by that amount. So then
+					we have an area to display, great! But it will almost certainly differ from the
+					resolution of the window, so we should scale with neam. Neam here seems alright,
+					right? Because we *want* to only have pixels that are in the image. No changing
+					pixel values AT ALL!!! And the strange artifacting we get sometimes seems again
+					arlight as I really expect users to select into an area, fill the screen, and
+					then take a value from there. And we only relly get the artifacting when
+					downscaling, anyway.
 
-			Event::WindowEvent {
-				event: WindowEvent::Resized(phys),
-				..
-			} => {
-				println!("Reize");
-				buffer.resize_from_physical(phys);
-				window.request_redraw();
-			}
+					But but but! We need a way to look into a rectangular slice of the image. the
+					`imgbuffer` (`imgbuf?`) crate does this, but I'm not a great fan of that.
 
-			Event::WindowEvent {
-				event: WindowEvent::CloseRequested,
-				..
-			} => {
-				*flow = ControlFlow::Exit;
+					Hey now, I know we said that we'd try to use existing solutions from crates.io
+					more than we've been known for, but but! it's fine... okay? okay. right? right.
+
+					Okay, thanks! Love you <3
+				*/
+
+				fluff.draw_buffer();
 			}
 
 			Event::WindowEvent {
 				event: WindowEvent::KeyboardInput { input, .. },
 				..
 			} => {
-				//window.request_redraw();
+				fluff.window.request_redraw();
 			}
 
 			_ => (),

@@ -268,6 +268,7 @@ dependencies = [
 name = "fluffy"
 version = "0.1.0"
 dependencies = [
+ "softbuffer",
  "winit",
 ]
 
@@ -294,6 +295,14 @@ checksum = "c1ebd34e35c46e00bb73e81363248d627782724609fe1b6396f553f68fe3862e"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "gifed"
+version = "0.2.0"
+source = "git+https://github.com/gennyble/gifed#82cce5430ef7f12c4a0c518e9130364cde8d9461"
+dependencies = [
+ "weezl",
 ]
 
 [[package]]
@@ -488,6 +497,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "neam"
+version = "0.1.0"
+dependencies = [
+ "gifed",
+ "png",
+]
+
+[[package]]
 name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -630,6 +647,7 @@ name = "picker"
 version = "0.1.0"
 dependencies = [
  "fluffy",
+ "neam",
  "softbuffer",
  "winit",
 ]
@@ -1100,6 +1118,12 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "weezl"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
 
 [[package]]
 name = "winapi"
