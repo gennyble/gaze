@@ -1,5 +1,93 @@
-#[cfg(feature = "winit")]
-use winit::dpi::PhysicalSize;
+use softbuffer::{Context, Surface};
+use winit::{
+	dpi::PhysicalSize,
+	event::{Event, WindowEvent},
+	event_loop::{ControlFlow, EventLoop},
+	window::{Window, WindowBuilder},
+};
+
+pub struct FluffyWindow {
+	// `run` makes me so tired. i want `poll_events` so bad. the "Caveats" on `run_return` scare me
+	pub event_loop: Option<EventLoop<()>>,
+	pub window: Window,
+
+	pub context: Context,
+	pub surface: Surface,
+	pub buffer: Buffer,
+}
+
+impl FluffyWindow {
+	pub fn build_window(window_builder: WindowBuilder) -> Self {
+		let event_loop = EventLoop::new();
+		let window = window_builder.build(&event_loop).unwrap();
+		let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
+		let surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
+
+		let mut buffer = Buffer::new(0, 0);
+		buffer.resize_from_physical(window.inner_size());
+
+		Self {
+			event_loop: Some(event_loop),
+			window,
+			context,
+			surface,
+			buffer,
+		}
+	}
+
+	pub fn from_parts(
+		event_loop: Option<EventLoop<()>>,
+		window: Window,
+		context: Context,
+		surface: Surface,
+		buffer: Buffer,
+	) -> Self {
+		Self {
+			event_loop,
+			window,
+			context,
+			surface,
+			buffer,
+		}
+	}
+
+	pub fn common_events(&mut self, event: &Event<()>, flow: &mut ControlFlow) {
+		match event {
+			Event::WindowEvent {
+				event: WindowEvent::Resized(phys),
+				..
+			} => {
+				self.buffer.resize_from_physical(*phys);
+				self.window.request_redraw();
+			}
+
+			Event::WindowEvent {
+				event: WindowEvent::CloseRequested,
+				..
+			} => {
+				*flow = ControlFlow::Exit;
+			}
+
+			_ => (),
+		}
+	}
+
+	pub fn draw_buffer(&mut self) {
+		if self.buffer.width > 0 && self.buffer.height > 0 {
+			self.surface.set_buffer(
+				&self.buffer.data,
+				self.buffer.width as u16,
+				self.buffer.height as u16,
+			);
+		}
+	}
+
+	/// Take the event loop from Fluffy, leaving `None` it it's place. This is
+	/// neccesary 'cause lifetimes and ownership ahhhh. If there's no loop it panics
+	pub fn take_el(&mut self) -> EventLoop<()> {
+		self.event_loop.take().unwrap()
+	}
+}
 
 pub struct Buffer {
 	/// Bytes - 0RGB
@@ -21,7 +109,6 @@ impl Buffer {
 		self.data.fill(0)
 	}
 
-	#[cfg(feature = "winit")]
 	pub fn resize_from_physical(&mut self, phys: PhysicalSize<u32>) {
 		self.resize(phys.width as usize, phys.height as usize)
 	}

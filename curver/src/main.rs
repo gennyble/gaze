@@ -1,27 +1,20 @@
 use flo_curves::{bezier::Curve, BezierCurve, BezierCurveFactory, Coord2};
-use fluffy::{Buffer, Color};
+use fluffy::{Buffer, Color, FluffyWindow};
 use rfd::FileDialog;
 use winit::{
 	dpi::PhysicalSize,
 	event::{ElementState, Event, VirtualKeyCode, WindowEvent},
-	event_loop::{ControlFlow, EventLoop},
+	event_loop::ControlFlow,
 	window::WindowBuilder,
 };
 
 fn main() {
 	println!("Hi! :D");
 
-	let event_loop = EventLoop::new();
-	let window = WindowBuilder::new()
+	let builder = WindowBuilder::new()
 		.with_inner_size(PhysicalSize::new(640, 480))
-		.with_title("curver")
-		.build(&event_loop)
-		.unwrap();
-
-	let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
-	let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
-
-	let mut buffer = Buffer::new(0, 0);
+		.with_title("curver");
+	let mut flfy = FluffyWindow::build_window(builder);
 
 	let mut c1 = (170.0, 670.0);
 	let mut c2 = (830.0, 670.0);
@@ -29,17 +22,16 @@ fn main() {
 	let mut should_open_file_dialog = false;
 	let mut unsaved_changes = false;
 
-	// Will it even have an inner size yet? I'm pretty sure we get a resize in
-	// the first bunch of events, so it doesn't matter. but might as well try?
-	buffer.resize_from_physical(window.inner_size());
-
-	event_loop.run(move |event, _, flow| {
+	let el = flfy.take_el();
+	el.run(move |event, _, flow| {
 		*flow = ControlFlow::Wait;
+
+		flfy.common_events(&event, flow);
 
 		match event {
 			Event::RedrawRequested(_wid) => {
-				draw(&mut buffer, c1, c2, selected);
-				surface.set_buffer(&buffer.data, buffer.width as u16, buffer.height as u16);
+				draw(&mut flfy.buffer, c1, c2, selected);
+				flfy.draw_buffer();
 			}
 
 			Event::MainEventsCleared => {
@@ -49,24 +41,9 @@ fn main() {
 					save_dialog(c1, c2, &mut unsaved_changes);
 
 					if !unsaved_changes {
-						window.set_title("curver");
+						flfy.window.set_title("curver");
 					}
 				}
-			}
-
-			Event::WindowEvent {
-				event: WindowEvent::Resized(phys),
-				..
-			} => {
-				buffer.resize_from_physical(phys);
-				window.request_redraw();
-			}
-
-			Event::WindowEvent {
-				event: WindowEvent::CloseRequested,
-				..
-			} => {
-				*flow = ControlFlow::Exit;
 			}
 
 			Event::WindowEvent {
@@ -83,7 +60,7 @@ fn main() {
 				};
 
 				if vkc == VirtualKeyCode::R {
-					draw(&mut buffer, c1, c2, selected);
+					draw(&mut flfy.buffer, c1, c2, selected);
 				}
 
 				if vkc == VirtualKeyCode::S {
@@ -112,11 +89,11 @@ fn main() {
 				}
 
 				if !unsaved_changes {
-					window.set_title("curver - unsaved changes");
+					flfy.window.set_title("curver - unsaved changes");
 					unsaved_changes = true;
 				}
 
-				window.request_redraw();
+				flfy.window.request_redraw();
 			}
 
 			_ => (),
