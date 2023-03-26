@@ -1,13 +1,13 @@
 use softbuffer::{Context, Surface};
 use winit::{
 	event::{Event, WindowEvent},
-	event_loop::EventLoop,
+	event_loop::{ControlFlow, EventLoop},
 	window::Window,
 };
 
 pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::event;
-pub use winit::event_loop::ControlFlow;
+pub use winit::event_loop;
 pub use winit::window::WindowBuilder;
 
 pub struct FluffyWindow {
