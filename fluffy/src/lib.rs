@@ -1,10 +1,14 @@
 use softbuffer::{Context, Surface};
 use winit::{
-	dpi::PhysicalSize,
 	event::{Event, WindowEvent},
-	event_loop::{ControlFlow, EventLoop},
-	window::{Window, WindowBuilder},
+	event_loop::EventLoop,
+	window::Window,
 };
+
+pub use winit::dpi::{LogicalSize, PhysicalSize};
+pub use winit::event;
+pub use winit::event_loop::ControlFlow;
+pub use winit::window::WindowBuilder;
 
 pub struct FluffyWindow {
 	// `run` makes me so tired. i want `poll_events` so bad. the "Caveats" on `run_return` scare me
