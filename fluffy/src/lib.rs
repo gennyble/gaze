@@ -109,6 +109,17 @@ impl Buffer {
 		}
 	}
 
+	//TODO: gen- Check it's the right size and like, rename it probably, too
+	pub fn as_rgb_bytes(&self, rgb: &mut [u8]) {
+		for (idx, px) in self.data.iter().enumerate() {
+			let bytes = px.to_be_bytes();
+			// bytes[0] is the 0x00 of 00RRGGBB
+			rgb[idx * 3] = bytes[1];
+			rgb[idx * 3 + 1] = bytes[2];
+			rgb[idx * 3 + 2] = bytes[3];
+		}
+	}
+
 	pub fn clear(&mut self) {
 		self.data.fill(0)
 	}
