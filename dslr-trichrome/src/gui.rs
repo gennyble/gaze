@@ -20,19 +20,26 @@ pub fn run_gui() -> ! {
 	std::process::exit(0)
 }
 
-struct SelectedImage {
+struct SelectedChannel {
+	channel: Channel,
 	filename: Option<String>,
-	working_thread: Option<JoinHandle<Result<Image<u8, Srgb>, rawproc::Error>>>,
-	data: Option<Image<u8, Srgb>>,
 	file_is_error: bool,
+	working_thread: Option<JoinHandle<Result<Image<u8, Srgb>, rawproc::Error>>>,
+
+	data: Option<Vec<u8>>,
+	width: usize,
+	height: usize,
 }
 
-impl SelectedImage {
-	pub fn new() -> Self {
-		SelectedImage {
+impl SelectedChannel {
+	pub fn new(channel: Channel) -> Self {
+		Self {
+			channel,
 			filename: None,
 			working_thread: None,
 			data: None,
+			width: 0,
+			height: 0,
 			file_is_error: false,
 		}
 	}
@@ -54,7 +61,7 @@ impl SelectedImage {
 			.unwrap_or(false)
 	}
 
-	pub fn maybe_finish_work(&mut self) -> Option<Result<&Image<u8, Srgb>, rawproc::Error>> {
+	pub fn maybe_finish_work(&mut self) -> Option<Result<BorrowImage, rawproc::Error>> {
 		if self.work_ready() {
 			match self.working_thread.take() {
 				None => None,
@@ -65,14 +72,40 @@ impl SelectedImage {
 					}
 					Ok(img) => {
 						self.file_is_error = false;
-						self.data = Some(img);
-						Some(Ok(self.data.as_ref().unwrap()))
+
+						self.width = img.width;
+						self.height = img.height;
+						self.data = Some(Self::extract_channe(img, self.channel));
+
+						Some(Ok(BorrowImage {
+							data: self.data.as_ref().unwrap(),
+							width: self.width,
+							height: self.height,
+						}))
 					}
 				},
 			}
 		} else {
 			None
 		}
+	}
+
+	fn extract_channe(img: Image<u8, Srgb>, channel: Channel) -> Vec<u8> {
+		let chidx = channel.index();
+
+		let Image {
+			width,
+			height,
+			mut data,
+			..
+		} = img;
+
+		for idx in 0..width * height {
+			data[idx] = data[idx * 3 + chidx];
+		}
+
+		data.resize(width * height, 0);
+		data
 	}
 
 	fn spawn_work_thread(fname: String) -> JoinHandle<Result<Image<u8, Srgb>, rawproc::Error>> {
@@ -87,49 +120,43 @@ impl SelectedImage {
 	}
 }
 
+struct BorrowImage<'a> {
+	data: &'a [u8],
+	width: usize,
+	height: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Channel {
+	Red,
+	Green,
+	Blue,
+}
+
+impl Channel {
+	pub fn index(&self) -> usize {
+		match self {
+			Self::Red => 0,
+			Self::Green => 1,
+			Self::Blue => 2,
+		}
+	}
+}
+
 struct DslrTrichrome {
 	image: Option<ColorImage>,
-	red: SelectedImage,
+	red: SelectedChannel,
+	green: SelectedChannel,
+	blue: SelectedChannel,
 
 	texture: Option<TextureHandle>,
 }
 
 impl eframe::App for DslrTrichrome {
 	fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-		if self.red.working() {
-			match self.red.maybe_finish_work() {
-				None | Some(Err(_)) => (),
-				Some(Ok(img)) => match self.image.as_mut() {
-					None => (),
-					Some(clr) => {
-						let mut dest = vec![0; clr.width() * clr.height() * 3];
-
-						let start = Instant::now();
-						resize::new(
-							img.width,
-							img.height,
-							clr.width(),
-							clr.height(),
-							resize::Pixel::RGB8,
-							resize::Type::Triangle,
-						)
-						.unwrap()
-						.resize(img.data.as_rgb(), dest.as_rgb_mut())
-						.unwrap();
-						println!("Resize took {}ms", start.elapsed().as_millis());
-
-						for (idx, pix) in clr.pixels.iter_mut().enumerate() {
-							*pix = Color32::from_rgb(dest[idx * 3], pix.g(), pix.b())
-						}
-
-						self.texture
-							.as_mut()
-							.unwrap()
-							.set(clr.clone(), Default::default());
-					}
-				},
-			}
-		}
+		self.poll_channel_work(Channel::Red);
+		self.poll_channel_work(Channel::Green);
+		self.poll_channel_work(Channel::Blue);
 
 		let img = self.image.as_ref().unwrap().clone();
 		let texture: &TextureHandle = self
@@ -173,24 +200,30 @@ impl eframe::App for DslrTrichrome {
 
 				ui.allocate_space(Vec2::new(1.0, 8.0));
 
-				ui.label("Image Selection");
-				ui.horizontal(|ui| {
-					if ui.button(RichText::new("Red").color(clr_r)).clicked() {
-						if let Some(path) = rfd::FileDialog::new().pick_file() {
-							self.red.new_selection(path.to_string_lossy().into_owned());
-						}
-					}
+				macro_rules! image_selection {
+					($button:literal, $color:expr, $selectedchannel:expr) => {
+						ui.horizontal(|ui| {
+							if ui.button(RichText::new($button).color($color)).clicked() {
+								if let Some(path) = rfd::FileDialog::new().pick_file() {
+									$selectedchannel
+										.new_selection(path.to_string_lossy().into_owned());
+								}
+							}
 
-					ui.label(self.red.filename.as_deref().unwrap_or("No file selected"));
-				});
-				ui.horizontal(|ui| {
-					ui.button(RichText::new("Green").color(clr_g));
-					ui.label("Filename");
-				});
-				ui.horizontal(|ui| {
-					ui.button(RichText::new("Blue").color(clr_b));
-					ui.label("Filename");
-				});
+							ui.label(
+								$selectedchannel
+									.filename
+									.as_deref()
+									.unwrap_or("No file selected"),
+							);
+						});
+					};
+				}
+
+				ui.label("Image Selection");
+				image_selection!("Red", clr_r, self.red);
+				image_selection!("Green", clr_g, self.green);
+				image_selection!("Blue", clr_b, self.blue);
 
 				ui.allocate_space(ui.available_size());
 			});
@@ -204,9 +237,54 @@ impl DslrTrichrome {
 
 		Self {
 			image: Some(img),
-			red: SelectedImage::new(),
+			red: SelectedChannel::new(Channel::Red),
+			green: SelectedChannel::new(Channel::Green),
+			blue: SelectedChannel::new(Channel::Blue),
 
 			texture: None,
+		}
+	}
+
+	pub fn poll_channel_work(&mut self, channel: Channel) {
+		let selected = match channel {
+			Channel::Red => &mut self.red,
+			Channel::Green => &mut self.green,
+			Channel::Blue => &mut self.blue,
+		};
+
+		if selected.working() {
+			match selected.maybe_finish_work() {
+				None | Some(Err(_)) => (),
+				Some(Ok(img)) => match self.image.as_mut() {
+					None => (),
+					Some(clr) => {
+						let mut dest = vec![0; clr.width() * clr.height()];
+
+						let start = Instant::now();
+						resize::new(
+							img.width,
+							img.height,
+							clr.width(),
+							clr.height(),
+							resize::Pixel::Gray8,
+							resize::Type::Triangle,
+						)
+						.unwrap()
+						.resize(img.data.as_gray(), dest.as_gray_mut())
+						.unwrap();
+						println!("Resize took {}ms", start.elapsed().as_millis());
+
+						for (idx, pix) in clr.as_raw_mut().chunks_mut(4).enumerate() {
+							pix[channel.index()] = dest[idx];
+						}
+
+						self.texture
+							.as_mut()
+							.unwrap()
+							.set(clr.clone(), Default::default());
+					}
+				},
+			}
 		}
 	}
 }
