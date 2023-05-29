@@ -516,3 +516,9 @@ impl From<Image<u16, Srgb>> for TrichromedImage {
 		}
 	}
 }
+
+#[derive(Clone, Copy, Debug)]
+struct Offset {
+	top: i32,
+	left: i32,
+}

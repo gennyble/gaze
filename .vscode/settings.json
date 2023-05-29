@@ -2,5 +2,8 @@
 	"rust-analyzer.files.excludeDirs": [
 		"gaze",
 		"mipp"
+	],
+	"rust-analyzer.linkedProjects": [
+		"./rawproc-dev/Cargo.toml"
 	]
 }

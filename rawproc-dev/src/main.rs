@@ -14,6 +14,7 @@ fn main() {
 	let mut p = Profiler::new();
 	let mut file = std::fs::File::open(&name).unwrap();
 
+	p.start(Profile::AllOfIt);
 	p.start(Profile::Decode);
 	let mut raw = decode(&mut file).unwrap();
 	p.end(Profile::Decode);
@@ -29,10 +30,12 @@ fn main() {
 
 	println!("WB {:?}", raw.metadata.whitebalance);
 
+	p.start(Profile::PreColour);
 	for px in raw.data.iter_mut() {
 		//*px = (*px as f32).powf(1.0) as u16; //(*px as f32 * 6.0) as u16;
-		*px = ((*px as f32) * 3.0) as u16;
+		*px = ((*px as f32) * 1.25) as u16;
 	}
+	p.end(Profile::PreColour);
 
 	p.start(Profile::Debayer);
 	let rgb = raw.debayer();
@@ -41,9 +44,13 @@ fn main() {
 	p.start(Profile::XyzToSrgb);
 	let xyz = rgb.to_xyz();
 	let linsrgb = xyz.to_linsrgb();
+	p.end(Profile::XyzToSrgb);
 
-	let curve_file = "../curve.lsv";
+	let curve_file = "/Users/gen/weird.lsv";
+	//let curve_file = "../curve.lsv";
 	let curve_string = std::fs::read_to_string(curve_file).unwrap();
+
+	p.start(Profile::ToneCurve);
 	let curve_floats: Vec<f32> = curve_string
 		.lines()
 		.map(|line| line.trim().parse::<f32>().unwrap())
@@ -58,7 +65,9 @@ fn main() {
 
 		*pixel = lerp(start, end, percent);
 	}
+	p.end(Profile::ToneCurve);
 
+	p.start(Profile::Colour);
 	let mut srgb = flinsrgb.gamma();
 	srgb.contrast(1.05);
 	srgb.autolevel();
@@ -66,20 +75,28 @@ fn main() {
 	let mut hsv: Image<f32, Hsv> = srgb.into();
 	hsv.saturation(1.05);
 	let srgb: Image<f32, Srgb> = hsv.into();
+	p.end(Profile::Colour);
+	p.end(Profile::AllOfIt);
 
-	p.end(Profile::XyzToSrgb);
-
+	println!("");
 	println!("Decode  {}ms", p.elapsed_ms(Profile::Decode).unwrap());
 	println!("Crop    {}ms", p.elapsed_ms(Profile::Crop).unwrap());
 	println!("W.B.    {}ms", p.elapsed_ms(Profile::Whitebalance).unwrap());
-	println!("Debayer {}ms", p.elapsed_ms(Profile::Debayer).unwrap());
-	println!("Colours {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
+	println!("Colour  {}ms", p.elapsed_ms(Profile::PreColour).unwrap());
+	println!("Debayer {}ms\n", p.elapsed_ms(Profile::Debayer).unwrap());
+	println!("XYZ->sRGB {}ms", p.elapsed_ms(Profile::XyzToSrgb).unwrap());
+	println!("Curve     {}ms", p.elapsed_ms(Profile::ToneCurve).unwrap());
+	println!("Colour    {}ms\n", p.elapsed_ms(Profile::Colour).unwrap());
+	println!(
+		"AllOfIt {:.3}s",
+		p.elapsed(Profile::AllOfIt).unwrap().as_secs_f64()
+	);
 
 	let img = srgb.bytes();
 
 	let out = OutImage::new(img.width, img.height, img.data);
 	let name = std::env::args().nth(2).unwrap();
-	out.jpeg(name, 65.0);
+	out.jpeg(name, 85.0);
 
 	/*let mut enc = png::Encoder::new(file, width, height);
 	enc.set_color(png::ColorType::Rgb);
@@ -139,11 +156,15 @@ impl Profiler {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Profile {
+	AllOfIt,
 	Decode,
 	Crop,
 	Whitebalance,
+	PreColour,
 	Debayer,
+	ToneCurve,
 	XyzToSrgb,
+	Colour,
 }
 
 fn lerp(start: f32, end: f32, percent: f32) -> f32 {

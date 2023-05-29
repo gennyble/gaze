@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 png = "0.17.7"
 rawproc = { path = "../rawproc" }
-neam = { path= "../../neam/neam" }
+neam = { path= "../../neam" }
 imgout = { path = "../imgout" }
 camino = "1.1.2"

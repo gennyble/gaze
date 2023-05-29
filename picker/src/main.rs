@@ -1,4 +1,4 @@
-use fluffy::{Buffer, FluffyWindow};
+use fluffy::{Buffer, Color, FluffyWindow};
 use winit::{
 	dpi::PhysicalSize,
 	event::{Event, WindowEvent},
@@ -16,13 +16,9 @@ fn main() {
 	let mut fluff = FluffyWindow::build_window(builder);
 
 	// Create test image
-	let mut img = fluff.buffer.data.clone();
-	img.iter_mut().enumerate().for_each(|(idx, px)| {
-		let red = idx % 256;
-		let blue = (idx / 256) % 256;
-		let green = (idx / (256 * 256)) % 256;
-
-		*px = u32::from_be_bytes([0, red as u8, green as u8, blue as u8])
+	let mut img = Buffer::new(256, 256);
+	img.data.iter_mut().enumerate().for_each(|(idx, px)| {
+		*px = Color::new((idx % 256) as u8, 0, (idx / 256) as u8).u32();
 	});
 
 	println!("Initialized");
@@ -57,6 +53,12 @@ fn main() {
 					more than we've been known for, but but! it's fine... okay? okay. right? right.
 
 					Okay, thanks! Love you <3
+
+					ADENDUM
+
+					Window picking is seemingly very hard to reason about right now. Maybe it's just
+					my brainstate. So! So so so *so so* **so so so so** ***so***. We're changing pace
+					just a little bit. Kind of! Gently. Gentle pace change.
 				*/
 
 				fluff.draw_buffer();
@@ -72,4 +74,8 @@ fn main() {
 			_ => (),
 		}
 	});
+}
+
+pub fn fit_image(target_dimensiosn:) {
+
 }
