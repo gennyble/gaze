@@ -1,3 +1,5 @@
+mod gui;
+
 use std::{
 	fs::File,
 	io::{BufReader, Write},
@@ -32,6 +34,8 @@ struct Trichrome {
 	output_prefix: Utf8PathBuf,
 	#[arg(short = 's', long)]
 	output_set: bool,
+	#[arg(long)]
+	gui: bool,
 }
 
 impl Trichrome {
@@ -64,6 +68,10 @@ enum Exposures {
 
 fn main() {
 	let args = Trichrome::parse();
+
+	if args.gui {
+		gui::run_gui()
+	}
 
 	let exposures = if let Some(path) = args.directory.as_deref() {
 		if args.any_channel_set() {

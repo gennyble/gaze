@@ -15,4 +15,9 @@ rand = "0.8.5"
 rawproc = { path = "../rawproc" }
 neam = { git = "https://github.com/gennyble/neam" }
 webp = "0.2.2"
+
 eframe = "0.22.0"
+egui = "0.22.0"
+resize = "0.7.4"
+rfd = "0.11.4"
+rgb = "0.8.36"
