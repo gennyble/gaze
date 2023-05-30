@@ -1,6 +1,8 @@
-use std::{fs::File, thread::JoinHandle, time::Instant};
+use core::fmt;
+use std::{cell::Cell, fs::File, thread::JoinHandle, time::Instant};
 
-use egui::{Color32, ColorImage, RichText, TextureHandle, Vec2};
+use egui::{Color32, ColorImage, Layout, RichText, TextureHandle, Vec2};
+use egui_dock::Tree;
 use rawproc::{colorspace::Srgb, image::Image};
 use rgb::FromSlice;
 
@@ -75,7 +77,7 @@ impl SelectedChannel {
 
 						self.width = img.width;
 						self.height = img.height;
-						self.data = Some(Self::extract_channe(img, self.channel));
+						self.data = Some(Self::extract_channel(img, self.channel));
 
 						Some(Ok(BorrowImage {
 							data: self.data.as_ref().unwrap(),
@@ -90,7 +92,7 @@ impl SelectedChannel {
 		}
 	}
 
-	fn extract_channe(img: Image<u8, Srgb>, channel: Channel) -> Vec<u8> {
+	fn extract_channel(img: Image<u8, Srgb>, channel: Channel) -> Vec<u8> {
 		let chidx = channel.index();
 
 		let Image {
@@ -141,15 +143,73 @@ impl Channel {
 			Self::Blue => 2,
 		}
 	}
+
+	pub fn color_text(&self, text: impl Into<String>) -> RichText {
+		RichText::new(text).color(self.color32())
+	}
+
+	pub fn name_label(&self) -> RichText {
+		self.color_text(self.to_string())
+	}
+
+	pub fn color32(&self) -> Color32 {
+		match self {
+			Self::Red => RED,
+			Self::Green => GREEN,
+			Self::Blue => BLUE,
+		}
+	}
+}
+
+impl fmt::Display for Channel {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Channel::Red => write!(f, "Red"),
+			Channel::Green => write!(f, "Green"),
+			Channel::Blue => write!(f, "Blue"),
+		}
+	}
+}
+
+const RED: Color32 = Color32::from_rgb(255, 64, 64);
+const GREEN: Color32 = Color32::from_rgb(64, 255, 64);
+const BLUE: Color32 = Color32::from_rgb(64, 64, 255);
+
+enum Tab {
+	Input,
+	Offset,
+}
+
+impl Tab {
+	pub fn str(&self) -> &'static str {
+		match self {
+			Tab::Input => "Input",
+			Tab::Offset => "Offset",
+		}
+	}
+}
+
+impl fmt::Display for Tab {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.str())
+	}
 }
 
 struct DslrTrichrome {
 	image: Option<ColorImage>,
+
 	red: SelectedChannel,
 	green: SelectedChannel,
 	blue: SelectedChannel,
 
+	selected: Channel,
+	red_offset: (isize, isize),
+	green_offset: (isize, isize),
+	blue_offset: (isize, isize),
+
 	texture: Option<TextureHandle>,
+	// This is an option so we can take() it, use DslrTrichrome as the TabViewer, and then put it back.
+	tabs: Option<Tree<Tab>>,
 }
 
 impl eframe::App for DslrTrichrome {
@@ -158,90 +218,110 @@ impl eframe::App for DslrTrichrome {
 		self.poll_channel_work(Channel::Green);
 		self.poll_channel_work(Channel::Blue);
 
-		let img = self.image.as_ref().unwrap().clone();
-		let texture: &TextureHandle = self
-			.texture
-			.get_or_insert_with(|| ctx.load_texture("image", img, Default::default()));
-
 		egui::CentralPanel::default().show(ctx, |ui| {
-			let avsize = ui.available_size();
-			let mut tsize = texture.size_vec2();
+			let mut reoffset = false;
+			ui.input(|i| {
+				let offset = match self.selected {
+					Channel::Red => &mut self.red_offset,
+					Channel::Green => &mut self.green_offset,
+					Channel::Blue => &mut self.blue_offset,
+				};
 
-			let thdivw = tsize.y / tsize.x;
-			let twdivh = tsize.x / tsize.y;
-
-			tsize.y = (avsize.x * thdivw).min(2.0 * avsize.y / 3.0);
-			tsize.x = tsize.y * twdivh;
-
-			//println!("{tsize:?}");
-
-			ui.vertical(|ui| {
-				ui.horizontal(|ui| {
-					ui.with_layout(
-						egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-						|ui| ui.image(texture, tsize),
-					)
-				});
-
-				ui.horizontal(|ui| {
-					ui.label("Manipulating Channel: ");
-					ui.label(RichText::new("none").color(Color32::LIGHT_GRAY));
-				});
-
-				let clr_r = Color32::from_rgb(255, 64, 64);
-				let clr_g = Color32::from_rgb(64, 255, 64);
-				let clr_b = Color32::from_rgb(64, 64, 255);
-
-				ui.horizontal(|ui| {
-					ui.button(RichText::new("Red").color(clr_r));
-					ui.button(RichText::new("Green").color(clr_g));
-					ui.button(RichText::new("Blue").color(clr_b));
-				});
-
-				ui.allocate_space(Vec2::new(1.0, 8.0));
-
-				macro_rules! image_selection {
-					($button:literal, $color:expr, $selectedchannel:expr) => {
-						ui.horizontal(|ui| {
-							if ui.button(RichText::new($button).color($color)).clicked() {
-								if let Some(path) = rfd::FileDialog::new().pick_file() {
-									$selectedchannel
-										.new_selection(path.to_string_lossy().into_owned());
-								}
-							}
-
-							ui.label(
-								$selectedchannel
-									.filename
-									.as_deref()
-									.unwrap_or("No file selected"),
-							);
-						});
-					};
+				if i.key_pressed(egui::Key::ArrowUp) {
+					offset.1 += 1;
+					reoffset = true;
+				} else if i.key_pressed(egui::Key::ArrowDown) {
+					offset.1 -= 1;
+					reoffset = true;
 				}
 
-				ui.label("Image Selection");
-				image_selection!("Red", clr_r, self.red);
-				image_selection!("Green", clr_g, self.green);
-				image_selection!("Blue", clr_b, self.blue);
+				if i.key_pressed(egui::Key::ArrowLeft) {
+					offset.0 -= 1;
+					reoffset = true;
+				} else if i.key_pressed(egui::Key::ArrowRight) {
+					offset.0 += 1;
+					reoffset = true;
+				}
+			});
 
-				ui.allocate_space(ui.available_size());
+			ui.vertical(|ui| {
+				let avsize = ui.available_size();
+				ui.allocate_ui(Vec2::new(avsize.x, avsize.y / 2.0), |ui| {
+					ui.horizontal(|ui| {
+						let img = self.image.as_ref().unwrap().clone();
+						let texture: &TextureHandle = self.texture.get_or_insert_with(|| {
+							ctx.load_texture("image", img, Default::default())
+						});
+
+						let mut tsize = texture.size_vec2();
+
+						let thdivw = tsize.y / tsize.x;
+						let twdivh = tsize.x / tsize.y;
+
+						tsize.y = (avsize.x * thdivw).min(2.0 * avsize.y / 3.0);
+						tsize.x = tsize.y * twdivh;
+
+						ui.with_layout(
+							egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+							|ui| ui.image(texture, tsize),
+						)
+					});
+				});
+
+				let mut tree = self
+					.tabs
+					.take()
+					.expect("There was no tab tree. this should be impossible!");
+
+				egui_dock::DockArea::new(&mut tree)
+					.show_close_buttons(false)
+					.style(egui_dock::Style::from_egui(ui.style().as_ref()))
+					.show_inside(ui, self);
+
+				self.tabs = Some(tree);
 			});
 		});
 	}
 }
 
+impl egui_dock::TabViewer for DslrTrichrome {
+	type Tab = Tab;
+
+	fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+		match tab {
+			Tab::Offset => self.ui_offset_tab(ui),
+			Tab::Input => self.ui_input_tab(ui),
+		}
+	}
+
+	fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
+		tab.str().into()
+	}
+}
+
 impl DslrTrichrome {
+	/// The largest side of the preview.
+	const PREVIEW_LARGE: f32 = 1000.0;
+
 	pub fn new() -> Self {
 		let img = ColorImage::from_rgb([1000, 666], &[0u8; 1000 * 666 * 3]);
 
+		let tree = Tree::new(vec![Tab::Input, Tab::Offset]);
+
 		Self {
 			image: Some(img),
+
 			red: SelectedChannel::new(Channel::Red),
 			green: SelectedChannel::new(Channel::Green),
 			blue: SelectedChannel::new(Channel::Blue),
 
+			selected: Channel::Red,
+			red_offset: (0, 0),
+			green_offset: (0, 0),
+			blue_offset: (0, 0),
+
 			texture: None,
+			tabs: Some(tree),
 		}
 	}
 
@@ -286,5 +366,71 @@ impl DslrTrichrome {
 				},
 			}
 		}
+	}
+
+	pub fn make_texture(&mut self) {}
+
+	pub fn build_image() -> Vec<u8> {
+		todo!()
+	}
+
+	fn ui_offset_tab(&mut self, ui: &mut egui::Ui) {
+		ui.label("Move the selected channel with the arrow keys");
+		ui.horizontal(|ui| {
+			ui.label("Manipulating Channel: ");
+			ui.label(self.selected.name_label());
+		});
+
+		macro_rules! offset_button {
+			($ui:expr, $channel:expr) => {
+				let offset = match $channel {
+					Channel::Red => self.red_offset,
+					Channel::Green => self.green_offset,
+					Channel::Blue => self.blue_offset,
+				};
+
+				$ui.vertical(|ui| {
+					if ui.button($channel.name_label()).clicked() {
+						self.selected = $channel;
+					}
+
+					ui.label($channel.color_text(format!("{} / {}", offset.0, offset.1)));
+				})
+			};
+		}
+
+		ui.horizontal(|ui| {
+			offset_button!(ui, Channel::Red);
+			offset_button!(ui, Channel::Green);
+			offset_button!(ui, Channel::Blue);
+		});
+	}
+
+	fn ui_input_tab(&mut self, ui: &mut egui::Ui) {
+		macro_rules! image_selection {
+			($selectedchannel:expr) => {
+				ui.horizontal(|ui| {
+					if ui.button($selectedchannel.channel.name_label()).clicked() {
+						if let Some(path) = rfd::FileDialog::new().pick_file() {
+							$selectedchannel.new_selection(path.to_string_lossy().into_owned());
+						}
+					}
+
+					ui.label(
+						$selectedchannel
+							.filename
+							.as_deref()
+							.unwrap_or("No file selected"),
+					);
+				});
+			};
+		}
+
+		ui.label("Image Selection");
+		image_selection!(self.red);
+		image_selection!(self.green);
+		image_selection!(self.blue);
+
+		ui.allocate_space(ui.available_size());
 	}
 }
