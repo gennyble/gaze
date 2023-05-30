@@ -1,10 +1,13 @@
 use core::fmt;
 use std::{cell::Cell, fs::File, thread::JoinHandle, time::Instant};
 
+use camino::Utf8PathBuf;
 use egui::{Color32, ColorImage, Layout, RichText, TextureHandle, Vec2};
 use egui_dock::Tree;
 use rawproc::{colorspace::Srgb, image::Image};
 use rgb::FromSlice;
+
+use crate::TrichromedImage;
 
 /*
 Hey gen! Briefly, some words.
@@ -209,6 +212,7 @@ const BLUE: Color32 = Color32::from_rgb(64, 64, 255);
 enum Tab {
 	Input,
 	Offset,
+	Output,
 }
 
 impl Tab {
@@ -216,6 +220,7 @@ impl Tab {
 		match self {
 			Tab::Input => "Input",
 			Tab::Offset => "Offset",
+			Tab::Output => "Output",
 		}
 	}
 }
@@ -328,6 +333,7 @@ impl egui_dock::TabViewer for DslrTrichrome {
 		match tab {
 			Tab::Offset => self.ui_offset_tab(ui),
 			Tab::Input => self.ui_input_tab(ui),
+			Tab::Output => self.ui_output_tab(ui),
 		}
 	}
 
@@ -344,7 +350,7 @@ impl DslrTrichrome {
 		//TODO: gen- We should use the PREVIEW_LARGE here. to make a 4:3 image
 		let img = ColorImage::from_rgb([1000, 666], &[0u8; 1000 * 666 * 3]);
 
-		let tree = Tree::new(vec![Tab::Input, Tab::Offset]);
+		let tree = Tree::new(vec![Tab::Input, Tab::Offset, Tab::Output]);
 
 		Self {
 			image: Some(img),
@@ -531,5 +537,45 @@ impl DslrTrichrome {
 		image_selection!(self.blue);
 
 		ui.allocate_space(ui.available_size());
+	}
+
+	fn ui_output_tab(&mut self, ui: &mut egui::Ui) {
+		if ui.button("Save PNG").clicked() {
+			if let Some(path) = rfd::FileDialog::new().save_file() {
+				match self.image.as_ref() {
+					None => {
+						eprintln!("No image to save!");
+					}
+					Some(img) => {
+						println!("PNG Output: {}x{}", img.width(), img.height());
+						println!(
+							"{}px - sqrt {} - divw {}",
+							img.pixels.len(),
+							(img.pixels.len() as f32).sqrt() as usize,
+							img.pixels.len() / img.width()
+						);
+						println!("{} / px", img.as_raw().len() / img.pixels.len());
+
+						// Un A
+						let una_start = Instant::now();
+						let mut data = img.as_raw().to_vec();
+						for idx in 0..img.width() * img.height() {
+							data[idx * 3] = data[idx * 4];
+							data[idx * 3 + 1] = data[idx * 4 + 1];
+							data[idx * 3 + 2] = data[idx * 4 + 2];
+						}
+						data.resize(img.width() * img.height() * 3, 0);
+						println!("De-alpha took {}ms", una_start.elapsed().as_millis());
+
+						let trimg = TrichromedImage {
+							width: img.width(),
+							height: img.height(),
+							data,
+						};
+						trimg.png(Utf8PathBuf::try_from(path).unwrap())
+					}
+				}
+			}
+		}
 	}
 }
