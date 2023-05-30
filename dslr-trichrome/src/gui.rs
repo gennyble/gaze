@@ -6,6 +6,37 @@ use egui_dock::Tree;
 use rawproc::{colorspace::Srgb, image::Image};
 use rgb::FromSlice;
 
+/*
+Hey gen! Briefly, some words.
+
+We'd like it if the control tab thing was anchored to the bottom and the image
+filled the rest of the height in the window (within aspect ratio bounds).
+
+It would also be nice if the UI could change so the image is to the left of the
+controls if the image is vertical. Perhaps instead of automatically we could put
+a toggle in a...
+
+settings tab. it should have a save field as well as what to save. i'd like the
+ability to output multiple sizes if i want, for publishing i guess, in a few
+different formats. maybe that's a separate program where we read a PNG and do
+that. that could be useful. a CLI, too, and a library? I guess we made that with
+imgout before, but then you rolled back the code! gosh. can you save the settings,
+too, in like XDG_CONFIG/dslr-trichrome. or whatever it is if we rename it. perhaps
+this is what gaze can be. it seems like it might be easy to be like "who cares if the
+input is one image or trichrome". maybe it *does* end up all getting folded together.
+would certainly make the debayering easier. right!
+
+debayering. it's currently the bad style. the idea was to use rawproc and let you
+pass in separate buffers for the channels. and then you would just pass in the same
+buffer three times to do it normally. we could extract that away. extract? abstract.
+
+oh, hey! don't get distracte by the UI anymore? it works. just focus on the offset.
+it'll be great! i promise. you can make it all okay later. focus on the main purpose
+of the thing. please? thanks.
+
+tired, so it's time to sleep. you can do it! <3
+*/
+
 pub fn run_gui() -> ! {
 	let mut native_options = eframe::NativeOptions::default();
 	native_options.max_window_size = Some(Vec2::new(1080.0, 720.0));
@@ -304,6 +335,7 @@ impl DslrTrichrome {
 	const PREVIEW_LARGE: f32 = 1000.0;
 
 	pub fn new() -> Self {
+		//TODO: gen- We should use the PREVIEW_LARGE here. to make a 4:3 image
 		let img = ColorImage::from_rgb([1000, 666], &[0u8; 1000 * 666 * 3]);
 
 		let tree = Tree::new(vec![Tab::Input, Tab::Offset]);
@@ -325,6 +357,8 @@ impl DslrTrichrome {
 		}
 	}
 
+	//TODO: gen- Check if the image needs resizing or aspect change. Better yet, break out the blitting (?)
+	//to another function so we can redraw on offset change, too
 	pub fn poll_channel_work(&mut self, channel: Channel) {
 		let selected = match channel {
 			Channel::Red => &mut self.red,
@@ -367,8 +401,6 @@ impl DslrTrichrome {
 			}
 		}
 	}
-
-	pub fn make_texture(&mut self) {}
 
 	pub fn build_image() -> Vec<u8> {
 		todo!()
