@@ -258,22 +258,28 @@ impl eframe::App for DslrTrichrome {
 					Channel::Blue => &mut self.blue_offset,
 				};
 
+				let on = 10;
 				if i.key_pressed(egui::Key::ArrowUp) {
-					offset.1 += 1;
+					offset.1 -= on;
 					reoffset = true;
 				} else if i.key_pressed(egui::Key::ArrowDown) {
-					offset.1 -= 1;
+					offset.1 += on;
 					reoffset = true;
 				}
 
 				if i.key_pressed(egui::Key::ArrowLeft) {
-					offset.0 -= 1;
+					offset.0 -= on;
 					reoffset = true;
 				} else if i.key_pressed(egui::Key::ArrowRight) {
-					offset.0 += 1;
+					offset.0 += on;
 					reoffset = true;
 				}
 			});
+
+			if reoffset {
+				self.redraw_selected_channel();
+				self.make_texture();
+			}
 
 			ui.vertical(|ui| {
 				let avsize = ui.available_size();
@@ -372,38 +378,99 @@ impl DslrTrichrome {
 				Some(Ok(img)) => match self.image.as_mut() {
 					None => (),
 					Some(clr) => {
-						let mut dest = vec![0; clr.width() * clr.height()];
-
-						let start = Instant::now();
-						resize::new(
-							img.width,
-							img.height,
-							clr.width(),
-							clr.height(),
-							resize::Pixel::Gray8,
-							resize::Type::Triangle,
-						)
-						.unwrap()
-						.resize(img.data.as_gray(), dest.as_gray_mut())
-						.unwrap();
-						println!("Resize took {}ms", start.elapsed().as_millis());
-
-						for (idx, pix) in clr.as_raw_mut().chunks_mut(4).enumerate() {
-							pix[channel.index()] = dest[idx];
+						if clr.width() < img.width || clr.height() < img.height {
+							*clr = ColorImage::new(
+								[clr.width().max(img.width), clr.height().max(img.height)],
+								Color32::BLACK,
+							);
 						}
 
-						self.texture
-							.as_mut()
-							.unwrap()
-							.set(clr.clone(), Default::default());
+						self.redraw_channel(channel);
+						self.make_texture();
 					}
 				},
 			}
 		}
 	}
 
-	pub fn build_image() -> Vec<u8> {
-		todo!()
+	pub fn make_texture(&mut self) {
+		let prev_width = Self::PREVIEW_LARGE as usize;
+		let prev_height = 666;
+
+		if let Some(img) = self.image.as_ref() {
+			let mut dest = vec![0; prev_width as usize * prev_height * 3];
+
+			let start = Instant::now();
+			resize::new(
+				img.width(),
+				img.height(),
+				prev_width,
+				prev_height,
+				resize::Pixel::RGB8,
+				resize::Type::Triangle,
+			)
+			.unwrap()
+			.resize(img.as_raw().as_rgb(), dest.as_rgb_mut())
+			.unwrap();
+			println!("Resize took {}ms", start.elapsed().as_millis());
+
+			let colorimage = ColorImage::from_rgb([prev_width, prev_height], &dest);
+
+			self.texture
+				.as_mut()
+				.unwrap()
+				.set(colorimage, Default::default());
+		}
+	}
+
+	fn redraw_selected_channel(&mut self) {
+		self.redraw_channel(self.selected)
+	}
+
+	fn redraw_channel(&mut self, channel: Channel) {
+		let (offset, channel_img, width, height) = match channel {
+			Channel::Red => match self.red.data.as_ref() {
+				None => return,
+				Some(data) => (self.red_offset, data, self.red.width, self.red.height),
+			},
+			Channel::Green => match self.green.data.as_ref() {
+				None => return,
+				Some(data) => (self.green_offset, data, self.green.width, self.green.height),
+			},
+			Channel::Blue => match self.blue.data.as_ref() {
+				None => return,
+				Some(data) => (self.blue_offset, data, self.blue.width, self.blue.height),
+			},
+		};
+
+		let img = if let Some(img) = self.image.as_mut() {
+			img
+		} else {
+			return;
+		};
+
+		'rows: for y in 0..height {
+			'cols: for x in 0..width {
+				let xoff = x as isize + offset.0;
+				let yoff = y as isize + offset.1;
+
+				if yoff < 0 {
+					continue 'rows;
+				} else if yoff >= img.height() as isize {
+					return;
+				}
+
+				if xoff < 0 {
+					continue 'cols;
+				} else if xoff >= img.width() as isize {
+					continue 'rows;
+				}
+
+				let channel_idx = y as usize * width + x as usize;
+				let idx = yoff as usize * img.width() + xoff as usize;
+				img.as_raw_mut()[idx * 3 + channel.index()] = channel_img[channel_idx];
+			}
+		}
 	}
 
 	fn ui_offset_tab(&mut self, ui: &mut egui::Ui) {
