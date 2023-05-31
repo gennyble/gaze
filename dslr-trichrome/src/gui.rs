@@ -41,6 +41,8 @@ Like that one Jay Foreman thing where he sings a syllable out of beat.
 R G B A  R G B A  R G B A
 R G B R  G B R G  B R G B
 
+If you have the energy, can you remake imgout? It was useful.
+
 Tired. You did a good job focusing, thank you <3.
 
 */
