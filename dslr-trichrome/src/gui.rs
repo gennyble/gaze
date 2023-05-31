@@ -252,6 +252,8 @@ struct DslrTrichrome {
 	texture: Option<TextureHandle>,
 	// This is an option so we can take() it, use DslrTrichrome as the TabViewer, and then put it back.
 	tabs: Option<Tree<Tab>>,
+
+	out_format: OutputFormat,
 }
 
 impl eframe::App for DslrTrichrome {
@@ -385,6 +387,8 @@ impl DslrTrichrome {
 
 			texture: None,
 			tabs: Some(tree),
+
+			out_format: OutputFormat::Png,
 		}
 	}
 
@@ -560,48 +564,33 @@ impl DslrTrichrome {
 	}
 
 	fn ui_output_tab(&mut self, ui: &mut egui::Ui) {
-		//TODO: gen- Dedup save code
-		if ui.button("Save PNG").clicked() {
+		{
+			let sel = &mut self.out_format;
+			egui::ComboBox::from_label("Format")
+				.selected_text(format!("{}", sel))
+				.show_ui(ui, |ui| {
+					ui.selectable_value(sel, OutputFormat::Png, "Ping");
+					ui.selectable_value(sel, OutputFormat::Jpeg, "Jpeg");
+					ui.selectable_value(sel, OutputFormat::Webp, "Webp");
+				});
+		}
+
+		fn save(dtri: &mut DslrTrichrome) {
 			if let Some(path) = rfd::FileDialog::new().save_file() {
-				match self.image.as_ref() {
+				match dtri.image.as_ref() {
 					None => {
 						eprintln!("No image to save!");
 					}
 					Some(img) => {
-						self.output(Utf8PathBuf::try_from(path).unwrap(), img, OutputFormat::Png)
+						dtri.output(Utf8PathBuf::try_from(path).unwrap(), img, dtri.out_format)
 					}
 				}
 			}
 		}
 
-		if ui.button("Save JPG").clicked() {
-			if let Some(path) = rfd::FileDialog::new().save_file() {
-				match self.image.as_ref() {
-					None => {
-						eprintln!("No image to save!");
-					}
-					Some(img) => self.output(
-						Utf8PathBuf::try_from(path).unwrap(),
-						img,
-						OutputFormat::Jpeg,
-					),
-				}
-			}
-		}
-
-		if ui.button("Save WebP").clicked() {
-			if let Some(path) = rfd::FileDialog::new().save_file() {
-				match self.image.as_ref() {
-					None => {
-						eprintln!("No image to save!");
-					}
-					Some(img) => self.output(
-						Utf8PathBuf::try_from(path).unwrap(),
-						img,
-						OutputFormat::Webp,
-					),
-				}
-			}
+		//TODO: gen- Dedup save code
+		if ui.button("Save").clicked() {
+			save(self)
 		}
 	}
 
@@ -629,6 +618,7 @@ impl DslrTrichrome {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum OutputFormat {
 	Png,
 	Jpeg,
@@ -642,5 +632,17 @@ impl OutputFormat {
 			OutputFormat::Jpeg => "jpg",
 			OutputFormat::Webp => "webp",
 		}
+	}
+}
+
+impl fmt::Display for OutputFormat {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let name = match self {
+			OutputFormat::Png => "Png",
+			OutputFormat::Jpeg => "Jpeg",
+			OutputFormat::Webp => "WebP",
+		};
+
+		write!(f, "{}", name)
 	}
 }
