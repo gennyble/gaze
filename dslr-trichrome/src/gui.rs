@@ -254,6 +254,22 @@ impl eframe::App for DslrTrichrome {
 		self.poll_channel_work(Channel::Green);
 		self.poll_channel_work(Channel::Blue);
 
+		egui::TopBottomPanel::bottom("controls")
+			.min_height(150.0)
+			.show(ctx, |ui| {
+				let mut tree = self
+					.tabs
+					.take()
+					.expect("There was no tab tree. this should be impossible!");
+
+				egui_dock::DockArea::new(&mut tree)
+					.show_close_buttons(false)
+					.style(egui_dock::Style::from_egui(ui.style().as_ref()))
+					.show_inside(ui, self);
+
+				self.tabs = Some(tree);
+			});
+
 		egui::CentralPanel::default().show(ctx, |ui| {
 			let mut reoffset = false;
 			ui.input(|i| {
@@ -287,7 +303,7 @@ impl eframe::App for DslrTrichrome {
 			}
 
 			ui.vertical(|ui| {
-				let avsize = ui.available_size();
+				let avsize = ui.available_size_before_wrap();
 				ui.allocate_ui(Vec2::new(avsize.x, avsize.y / 2.0), |ui| {
 					ui.horizontal(|ui| {
 						let img = self.image.as_ref().unwrap().clone();
@@ -303,24 +319,13 @@ impl eframe::App for DslrTrichrome {
 						tsize.y = (avsize.x * thdivw).min(2.0 * avsize.y / 3.0);
 						tsize.x = tsize.y * twdivh;
 
-						ui.with_layout(
-							egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-							|ui| ui.image(texture, tsize),
-						)
+						//ui.with_layout(
+						/*egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+						|ui| */
+						ui.image(texture, Vec2::new(100.0, 100.0)) //,
+						                   //)
 					});
 				});
-
-				let mut tree = self
-					.tabs
-					.take()
-					.expect("There was no tab tree. this should be impossible!");
-
-				egui_dock::DockArea::new(&mut tree)
-					.show_close_buttons(false)
-					.style(egui_dock::Style::from_egui(ui.style().as_ref()))
-					.show_inside(ui, self);
-
-				self.tabs = Some(tree);
 			});
 		});
 	}
@@ -559,11 +564,11 @@ impl DslrTrichrome {
 						// Un A
 						let una_start = Instant::now();
 						let mut data = img.as_raw().to_vec();
-						for idx in 0..img.width() * img.height() {
+						/*for idx in 0..img.width() * img.height() {
 							data[idx * 3] = data[idx * 4];
 							data[idx * 3 + 1] = data[idx * 4 + 1];
 							data[idx * 3 + 2] = data[idx * 4 + 2];
-						}
+						}*/
 						data.resize(img.width() * img.height() * 3, 0);
 						println!("De-alpha took {}ms", una_start.elapsed().as_millis());
 
@@ -572,7 +577,10 @@ impl DslrTrichrome {
 							height: img.height(),
 							data,
 						};
-						trimg.png(Utf8PathBuf::try_from(path).unwrap())
+						trimg.png(Utf8PathBuf::try_from(path.clone()).unwrap());
+						trimg
+							.half()
+							.jpeg(Utf8PathBuf::try_from(path).unwrap(), 50.0);
 					}
 				}
 			}
