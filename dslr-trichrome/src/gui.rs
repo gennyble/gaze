@@ -10,34 +10,39 @@ use rgb::FromSlice;
 use crate::TrichromedImage;
 
 /*
-Hey gen! Briefly, some words.
+Hey gen.
 
-We'd like it if the control tab thing was anchored to the bottom and the image
-filled the rest of the height in the window (within aspect ratio bounds).
+Long day, I know. Here's what you acheived today:
+- offsetting! it works. that's the entire purpose of this, so it was important.
+- save as PNG! just so we can test things.
+- anchor controls to the bottom and size image correctly. we're particularly proud of the sizing code!
 
-It would also be nice if the UI could change so the image is to the left of the
-controls if the image is vertical. Perhaps instead of automatically we could put
-a toggle in a...
+Carrying some things over from yesterday:
 
-settings tab. it should have a save field as well as what to save. i'd like the
-ability to output multiple sizes if i want, for publishing i guess, in a few
-different formats. maybe that's a separate program where we read a PNG and do
-that. that could be useful. a CLI, too, and a library? I guess we made that with
-imgout before, but then you rolled back the code! gosh. can you save the settings,
-too, in like XDG_CONFIG/dslr-trichrome. or whatever it is if we rename it. perhaps
-this is what gaze can be. it seems like it might be easy to be like "who cares if the
-input is one image or trichrome". maybe it *does* end up all getting folded together.
-would certainly make the debayering easier. right!
+We wanted to have a kind of alternative UI when the image is taller than wide by
+a certain amount. 2/3rds as wide as it is tall, maybe. so like 2:3? It can be in
+a settings tab or change automatically, but we liked settings tab more.
 
-debayering. it's currently the bad style. the idea was to use rawproc and let you
-pass in separate buffers for the channels. and then you would just pass in the same
-buffer three times to do it normally. we could extract that away. extract? abstract.
+A settings tab would be nice. Maybe we could change the preview resolution and
+such. We can save the settings and stick in somewhere in the xdg_config place.
 
-oh, hey! don't get distracte by the UI anymore? it works. just focus on the offset.
-it'll be great! i promise. you can make it all okay later. focus on the main purpose
-of the thing. please? thanks.
+Oh, debayering, too. We can change the one in rawproc to accept three buffers,
+immutable, and just pass in the same three ones if we're only debayering one
+image.
 
-tired, so it's time to sleep. you can do it! <3
+Some more things, newly:
+
+A little slider from 1% to 100% in the Output tab for scaling the output.
+
+Oh, oh no. We also have to either fix how we're using egui's ColorImage or use
+our own buffer. Because it's,,, not great. Remember the alternating channels?
+Like that one Jay Foreman thing where he sings a syllable out of beat.
+
+R G B A  R G B A  R G B A
+R G B R  G B R G  B R G B
+
+Tired. You did a good job focusing, thank you <3.
+
 */
 
 pub fn run_gui() -> ! {
@@ -412,6 +417,7 @@ impl DslrTrichrome {
 	}
 
 	pub fn make_texture(&mut self) {
+		//TODO: can we grab the aspect ratio here and do this correctly?
 		let prev_width = Self::PREVIEW_LARGE as usize;
 		let prev_height = 666;
 
