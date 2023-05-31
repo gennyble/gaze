@@ -42,7 +42,6 @@ tired, so it's time to sleep. you can do it! <3
 
 pub fn run_gui() -> ! {
 	let mut native_options = eframe::NativeOptions::default();
-	native_options.max_window_size = Some(Vec2::new(1080.0, 720.0));
 	native_options.min_window_size = Some(Vec2::new(640.0, 480.0));
 	native_options.initial_window_size = Some(Vec2::new(640.0, 480.0));
 
@@ -303,27 +302,35 @@ impl eframe::App for DslrTrichrome {
 			}
 
 			ui.vertical(|ui| {
-				let avsize = ui.available_size_before_wrap();
-				ui.allocate_ui(Vec2::new(avsize.x, avsize.y / 2.0), |ui| {
+				let avsize = ui.available_size();
+				ui.allocate_ui(Vec2::new(avsize.x, avsize.y), |ui| {
 					ui.horizontal(|ui| {
 						let img = self.image.as_ref().unwrap().clone();
 						let texture: &TextureHandle = self.texture.get_or_insert_with(|| {
 							ctx.load_texture("image", img, Default::default())
 						});
 
-						let mut tsize = texture.size_vec2();
+						let aspect = texture.aspect_ratio();
 
-						let thdivw = tsize.y / tsize.x;
-						let twdivh = tsize.x / tsize.y;
+						println!("{avsize:?}");
 
-						tsize.y = (avsize.x * thdivw).min(2.0 * avsize.y / 3.0);
-						tsize.x = tsize.y * twdivh;
+						// "Width Major" - when the width is larger (aspect ratio > 1)
+						let wm_x = avsize.x;
+						let wm_y = wm_x * (1.0 / aspect);
 
-						//ui.with_layout(
-						/*egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-						|ui| */
-						ui.image(texture, Vec2::new(100.0, 100.0)) //,
-						                   //)
+						// "Height Major" - when the height is larger (aspect ratio < 1)
+						let hm_y = avsize.y;
+						let hm_x = hm_y * aspect;
+
+						let tsize = match (aspect > 1.0, wm_y > avsize.y, hm_x > avsize.x) {
+							(true, false, _) | (false, _, true) => Vec2::new(wm_x, wm_y),
+							(true, true, _) | (false, _, false) => Vec2::new(hm_x, hm_y),
+						};
+
+						ui.with_layout(
+							egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+							|ui| ui.image(texture, tsize),
+						);
 					});
 				});
 			});
