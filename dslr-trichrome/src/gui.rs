@@ -560,6 +560,7 @@ impl DslrTrichrome {
 	}
 
 	fn ui_output_tab(&mut self, ui: &mut egui::Ui) {
+		//TODO: gen- Dedup save code
 		if ui.button("Save PNG").clicked() {
 			if let Some(path) = rfd::FileDialog::new().save_file() {
 				match self.image.as_ref() {
@@ -567,38 +568,79 @@ impl DslrTrichrome {
 						eprintln!("No image to save!");
 					}
 					Some(img) => {
-						println!("PNG Output: {}x{}", img.width(), img.height());
-						println!(
-							"{}px - sqrt {} - divw {}",
-							img.pixels.len(),
-							(img.pixels.len() as f32).sqrt() as usize,
-							img.pixels.len() / img.width()
-						);
-						println!("{} / px", img.as_raw().len() / img.pixels.len());
-
-						// Un A
-						let una_start = Instant::now();
-						let mut data = img.as_raw().to_vec();
-						/*for idx in 0..img.width() * img.height() {
-							data[idx * 3] = data[idx * 4];
-							data[idx * 3 + 1] = data[idx * 4 + 1];
-							data[idx * 3 + 2] = data[idx * 4 + 2];
-						}*/
-						data.resize(img.width() * img.height() * 3, 0);
-						println!("De-alpha took {}ms", una_start.elapsed().as_millis());
-
-						let trimg = TrichromedImage {
-							width: img.width(),
-							height: img.height(),
-							data,
-						};
-						trimg.png(Utf8PathBuf::try_from(path.clone()).unwrap());
-						trimg
-							.half()
-							.jpeg(Utf8PathBuf::try_from(path).unwrap(), 50.0);
+						self.output(Utf8PathBuf::try_from(path).unwrap(), img, OutputFormat::Png)
 					}
 				}
 			}
+		}
+
+		if ui.button("Save JPG").clicked() {
+			if let Some(path) = rfd::FileDialog::new().save_file() {
+				match self.image.as_ref() {
+					None => {
+						eprintln!("No image to save!");
+					}
+					Some(img) => self.output(
+						Utf8PathBuf::try_from(path).unwrap(),
+						img,
+						OutputFormat::Jpeg,
+					),
+				}
+			}
+		}
+
+		if ui.button("Save WebP").clicked() {
+			if let Some(path) = rfd::FileDialog::new().save_file() {
+				match self.image.as_ref() {
+					None => {
+						eprintln!("No image to save!");
+					}
+					Some(img) => self.output(
+						Utf8PathBuf::try_from(path).unwrap(),
+						img,
+						OutputFormat::Webp,
+					),
+				}
+			}
+		}
+	}
+
+	fn output<P: Into<Utf8PathBuf>>(&self, path: P, img: &ColorImage, fmt: OutputFormat) {
+		let mut path: Utf8PathBuf = path.into();
+
+		if !path.ends_with(fmt.ext()) {
+			path.set_file_name(format!("{}.{}", path.file_name().unwrap(), fmt.ext()));
+		}
+
+		let mut data = img.as_raw().to_vec();
+		data.resize(img.width() * img.height() * 3, 0);
+
+		let trimg = TrichromedImage {
+			width: img.width(),
+			height: img.height(),
+			data,
+		};
+
+		match fmt {
+			OutputFormat::Png => trimg.png(path),
+			OutputFormat::Jpeg => trimg.jpeg(path, 50.0),
+			OutputFormat::Webp => trimg.webp(path, 50.0),
+		}
+	}
+}
+
+enum OutputFormat {
+	Png,
+	Jpeg,
+	Webp,
+}
+
+impl OutputFormat {
+	pub fn ext(&self) -> &'static str {
+		match self {
+			OutputFormat::Png => "png",
+			OutputFormat::Jpeg => "jpg",
+			OutputFormat::Webp => "webp",
 		}
 	}
 }
