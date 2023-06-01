@@ -45,6 +45,27 @@ If you have the energy, can you remake imgout? It was useful.
 
 Tired. You did a good job focusing, thank you <3.
 
+---
+
+A little tag-on rather than something new, because we didn't do much.
+
+ComboBox is weird and I would have called it Dropdown maybe, but that could be
+confused with other things so I don't know. We ran into the first element that
+we need to store state for. It turns out it's not painful at all and egui
+continues to be nice. yahoo.
+
+But we implemented saving as png, jpeg, or webp. and made a resize slider that
+is currently ignored. it would be nice if, instead of 1-100, it said 1% to 100%.
+can we do that with the slider API we're given? Instead of `show_value(true)`
+maybe there's a methd that lets us format it or we just use a label and do it
+ourself.
+
+aaand that's it! but i made a dentist appointment and survived the day. so
+that's good. probably. because the point of life is to live, which seems
+backwards and self-referential. but.
+
+the head is loud today. treat it well. goodnight.
+
 */
 
 pub fn run_gui() -> ! {
@@ -254,6 +275,7 @@ struct DslrTrichrome {
 	tabs: Option<Tree<Tab>>,
 
 	out_format: OutputFormat,
+	out_scale: f32,
 }
 
 impl eframe::App for DslrTrichrome {
@@ -389,6 +411,7 @@ impl DslrTrichrome {
 			tabs: Some(tree),
 
 			out_format: OutputFormat::Png,
+			out_scale: 100.0,
 		}
 	}
 
@@ -564,33 +587,33 @@ impl DslrTrichrome {
 	}
 
 	fn ui_output_tab(&mut self, ui: &mut egui::Ui) {
-		{
+		ui.horizontal(|ui| {
 			let sel = &mut self.out_format;
-			egui::ComboBox::from_label("Format")
+			egui::ComboBox::from_id_source("format_selection")
 				.selected_text(format!("{}", sel))
 				.show_ui(ui, |ui| {
 					ui.selectable_value(sel, OutputFormat::Png, "Ping");
 					ui.selectable_value(sel, OutputFormat::Jpeg, "Jpeg");
 					ui.selectable_value(sel, OutputFormat::Webp, "Webp");
 				});
-		}
 
-		fn save(dtri: &mut DslrTrichrome) {
-			if let Some(path) = rfd::FileDialog::new().save_file() {
-				match dtri.image.as_ref() {
-					None => {
-						eprintln!("No image to save!");
-					}
-					Some(img) => {
-						dtri.output(Utf8PathBuf::try_from(path).unwrap(), img, dtri.out_format)
+			if ui.button("Save").clicked() {
+				if let Some(path) = rfd::FileDialog::new().save_file() {
+					match self.image.as_ref() {
+						None => {
+							eprintln!("No image to save!");
+						}
+						Some(img) => {
+							self.output(Utf8PathBuf::try_from(path).unwrap(), img, self.out_format)
+						}
 					}
 				}
 			}
-		}
+		});
 
-		//TODO: gen- Dedup save code
-		if ui.button("Save").clicked() {
-			save(self)
+		//TOOD: gen- Use this. Also don't have it between the format selection and save button
+		{
+			ui.add(egui::Slider::new(&mut self.out_scale, 0.0..=100.0).show_value(true));
 		}
 	}
 
